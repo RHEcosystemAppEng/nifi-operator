@@ -1,0 +1,20 @@
+# permissions for end users to view nifis.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: nifi-viewer-role
+rules:
+- apiGroups:
+  - bigdata.quay.io
+  resources:
+  - nifis
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - bigdata.quay.io
+  resources:
+  - nifis/status
+  verbs:
+  - get

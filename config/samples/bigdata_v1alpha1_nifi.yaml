@@ -1,0 +1,6 @@
+apiVersion: bigdata.quay.io/v1alpha1
+kind: Nifi
+metadata:
+  name: nifi-sample
+spec:
+  size: 1
