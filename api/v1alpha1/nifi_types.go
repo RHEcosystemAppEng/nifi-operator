@@ -20,20 +20,26 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 // NifiSpec defines the desired state of Nifi
 type NifiSpec struct {
 	//+kubebuilder:validation:Minimum=0
+	//+kubebuilder:validation:Required
 	// Size is the size of the nifi deployment
 	Size int32 `json:"size"`
+
+	//+kubebuilder:default:true
+	//+kubebuilder:validation:Required
+	// UseDefaultCredentials defines if Nifi should be configured with the Single User default Credentials
+	UseDefaultCredentials bool `json:"useDefaultCredentials"`
 }
 
 // NifiStatus defines the observed state of Nifi
 type NifiStatus struct {
 	// Nodes are the names of the nifi pods
 	Nodes []string `json:"nodes"`
+
+	// Console Route Hostname
+	ConsoleRouteHostname string `json:"ConsoleHostname"`
 }
 
 //+kubebuilder:object:root=true

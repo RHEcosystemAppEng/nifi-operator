@@ -4,3 +4,4 @@ metadata:
   name: nifi-sample
 spec:
   size: 1
+  useDefaultCredentials: true

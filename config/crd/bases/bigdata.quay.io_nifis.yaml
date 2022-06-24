@@ -40,18 +40,27 @@ spec:
                 format: int32
                 minimum: 0
                 type: integer
+              useDefaultCredentials:
+                description: UseDefaultCredentials defines if Nifi should be configured
+                  with the Single User default Credentials
+                type: boolean
             required:
             - size
+            - useDefaultCredentials
             type: object
           status:
             description: NifiStatus defines the observed state of Nifi
             properties:
+              ConsoleHostname:
+                description: Console Route Hostname
+                type: string
               nodes:
                 description: Nodes are the names of the nifi pods
                 items:
                   type: string
                 type: array
             required:
+            - ConsoleHostname
             - nodes
             type: object
         type: object
