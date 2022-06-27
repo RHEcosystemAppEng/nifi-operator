@@ -99,5 +99,6 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&bigdatav1alpha1.Nifi{}).
 		Owns(&appsv1.StatefulSet{}).
 		Owns(&v1.Service{}).
+		Owns(&v1.ConfigMap{}).
 		Complete(r)
 }

@@ -4,9 +4,9 @@ import (
 	"context"
 
 	bigdatav1alpha1 "github.com/RHEcosystemAppEng/nifi-operator/api/v1alpha1"
+	nifiutils "github.com/RHEcosystemAppEng/nifi-operator/controllers/nifiutils"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
@@ -99,14 +99,8 @@ func (r *Reconciler) reconcileStatefulSet(ctx context.Context, req ctrl.Request,
 	}
 
 	// Check if the StatefulSet exists
-	existingSS := &appsv1.StatefulSet{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      nifi.Name,
-			Namespace: nifi.Namespace,
-		},
-	}
-	err := r.Get(ctx, req.NamespacedName, existingSS)
-	if !errors.IsNotFound(err) { // if ss exists
+	existingSS := &appsv1.StatefulSet{}
+	if nifiutils.IsObjectFound(r.Client, nifi.Namespace, ss.Name, existingSS) {
 		changed := false
 
 		// Check Nifi.Spec.Size
@@ -120,6 +114,7 @@ func (r *Reconciler) reconcileStatefulSet(ctx context.Context, req ctrl.Request,
 			log.Info("Updating Nifi StatefulSet")
 			return r.Client.Update(ctx, existingSS)
 		}
+		return nil
 	}
 
 	// Set Nifi instance as the owner and controller

@@ -4,8 +4,8 @@ import (
 	"context"
 
 	bigdatav1alpha1 "github.com/RHEcosystemAppEng/nifi-operator/api/v1alpha1"
+	nifiutils "github.com/RHEcosystemAppEng/nifi-operator/controllers/nifiutils"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
@@ -35,9 +35,8 @@ func (r *Reconciler) reconcileServices(ctx context.Context, req ctrl.Request, ni
 	}
 
 	// Checking if service already exists
-	existingSrv := newService(nifi)
-	err := r.Get(ctx, req.NamespacedName, existingSrv)
-	if !errors.IsNotFound(err) {
+	existingSVC := &corev1.Service{}
+	if nifiutils.IsObjectFound(r.Client, nifi.Namespace, svc.Name, existingSVC) {
 		// if it exists, do nothing
 		return nil
 	}

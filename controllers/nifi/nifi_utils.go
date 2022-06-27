@@ -19,6 +19,11 @@ func (r *Reconciler) reconcileResources(ctx context.Context, req ctrl.Request, n
 		return err
 	}
 
+	log.Info("Reconciling ConfigMaps")
+	if err := r.reconcileConfigMaps(ctx, req, nifi); err != nil {
+		return err
+	}
+
 	log.Info("Reconciling Services")
 	if err := r.reconcileServices(ctx, req, nifi); err != nil {
 		return err
