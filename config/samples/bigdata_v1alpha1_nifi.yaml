@@ -3,5 +3,5 @@ kind: Nifi
 metadata:
   name: nifi-sample
 spec:
-  size: 1
+  size: 2
   useDefaultCredentials: true

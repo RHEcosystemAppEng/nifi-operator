@@ -37,15 +37,11 @@ type NifiSpec struct {
 type NifiStatus struct {
 	// Nodes are the names of the nifi pods
 	Nodes []string `json:"nodes"`
-
-	// Console Route Hostname
-	ConsoleRouteHostname string `json:"ConsoleHostname"`
 }
 
+// Nifi is the Schema for the nifis API
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
-
-// Nifi is the Schema for the nifis API
 type Nifi struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
