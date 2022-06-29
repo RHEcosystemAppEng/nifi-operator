@@ -61,6 +61,31 @@ const (
 	nifiConsolePort = 8443
 )
 
+// reconcileResources will reconcile every Nifi CRD associated resource
+func (r *Reconciler) reconcileResources(ctx context.Context, req ctrl.Request, nifi *bigdatav1alpha1.Nifi) error {
+	log.Info("Reconciling Status")
+	if err := r.reconcileStatus(ctx, req, nifi); err != nil {
+		return err
+	}
+
+	log.Info("Reconciling ConfigMaps")
+	if err := r.reconcileConfigMaps(ctx, req, nifi); err != nil {
+		return err
+	}
+
+	log.Info("Reconciling Services")
+	if err := r.reconcileServices(ctx, req, nifi); err != nil {
+		return err
+	}
+
+	log.Info("Reconciling StatefulSet")
+	if err := r.reconcileStatefulSet(ctx, req, nifi); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Reconcile loop function
 //+kubebuilder:rbac:groups=bigdata.quay.io,resources=nifi,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=bigdata.quay.io,resources=nifi/status,verbs=get;update;patch

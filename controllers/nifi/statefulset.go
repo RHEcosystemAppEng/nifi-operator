@@ -27,8 +27,9 @@ func (r *Reconciler) getEnvVars(nifi *bigdatav1alpha1.Nifi) *[]corev1.EnvVar {
 	return &envVars
 }
 
+// reconcileStatefulSet reconciles the StatefulSet to deploy Nifi instances
 func (r *Reconciler) reconcileStatefulSet(ctx context.Context, req ctrl.Request, nifi *bigdatav1alpha1.Nifi) error {
-	ls := labelsForNifi(nifi.Name)
+	ls := nifiutils.LabelsForNifi(nifi.Name)
 	envVars := r.getEnvVars(nifi)
 	ssUser := nifiUser
 	npam := nifiPropertiesAccessMode

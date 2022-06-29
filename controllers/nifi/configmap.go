@@ -16,22 +16,26 @@ const (
 	nifiPropertiesConfigMapNameSuffix = "-nifi-properties"
 )
 
+// newConfigMap returns a brand new corev1.ConfigMap
 func newConfigMap(nifi *bigdatav1alpha1.Nifi) *corev1.ConfigMap {
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      nifi.Name,
 			Namespace: nifi.Namespace,
-			Labels:    labelsForNifi(nifi.Name),
+			Labels:    nifiutils.LabelsForNifi(nifi.Name),
 		},
 	}
 }
 
+// newConfigMapWithName returns a corev1.ConfigMap object with a specific name
 func newConfigMapWithName(name string, nifi *bigdatav1alpha1.Nifi) *corev1.ConfigMap {
 	cm := newConfigMap(nifi)
 	cm.ObjectMeta.Name = name
 	return cm
 }
 
+// getDefaultNifiProperties returns a key-value map with every nifi.properties
+// default value to be parsed later
 func getDefaultNifiProperties() *map[string]string {
 	nifiProperties := make(map[string]string)
 	nifiProperties["nifi.flow.configuration.file"] = "./conf/flow.xml.gz"
@@ -246,29 +250,45 @@ func getDefaultNifiProperties() *map[string]string {
 	return &nifiProperties
 }
 
-func getNifiProperties(nifi *bigdatav1alpha1.Nifi) *map[string]string {
-	nifiConf := *getDefaultNifiProperties()
-
-	// Disable embedded Zookeeper if Nifi has only one instance
-	if nifi.Spec.Size == 1 {
-		nifiConf["nifi.state.management.embedded.zookeeper.start"] = "false"
+// enableNifiEmbeddedZookeeper checks depending of the number of Nifi Size if
+// the embedded Zookeeper should be enabled or not
+func enableNifiEmbeddedZookeeper(cm *map[string]string, nifi *bigdatav1alpha1.Nifi) {
+	if nifi.Spec.Size <= 1 {
+		(*cm)["nifi.state.management.embedded.zookeeper.start"] = "false"
 	} else {
-		nifiConf["nifi.state.management.embedded.zookeeper.start"] = "true"
+		(*cm)["nifi.state.management.embedded.zookeeper.start"] = "true"
 	}
-
-	return &nifiConf
 }
 
+// getNifiProperties returns every nifi.properties file's parameter already
+// updated with the Nifi CRD config definition
+func getNifiProperties(nifi *bigdatav1alpha1.Nifi) *map[string]string {
+	nifiConf := getDefaultNifiProperties()
+
+	// Dis/Enable Nifi's Embedded Zookeeper
+	enableNifiEmbeddedZookeeper(nifiConf, nifi)
+
+	// Disable embedded Zookeeper if Nifi has only one instance
+	return nifiConf
+}
+
+// newConfigMapNifiProperties returns a ConfigMap with the nifi.properties
+// values already updated and ready to be applied
 func newConfigMapNifiProperties(nifi *bigdatav1alpha1.Nifi) *corev1.ConfigMap {
 	cm := newConfigMapWithName(nifi.Name+nifiPropertiesConfigMapNameSuffix, nifi)
 
+	// Getting the nifi.properties values as a key-value map to be able to parse
+	// them one by one
 	nifiConf := getNifiProperties(nifi)
 	strConf := ""
 
+	// Concat every map value with its key in .conf file format to generate the
+	// nifi.properties file content
 	for key, value := range *nifiConf {
 		strConf += key + "=" + value + "\n"
 	}
 
+	// Assign Config Map Data field to store the nifi.properties file
 	cm.Data = map[string]string{
 		"nifi.properties": strConf,
 	}
@@ -276,16 +296,11 @@ func newConfigMapNifiProperties(nifi *bigdatav1alpha1.Nifi) *corev1.ConfigMap {
 	return cm
 }
 
-func (r *Reconciler) reconcileConfigMaps(ctx context.Context, req ctrl.Request, nifi *bigdatav1alpha1.Nifi) error {
-	if err := r.reconcileNifiProperties(ctx, req, nifi); err != nil {
-		return err
-	}
-	return nil
-}
-
+// reconcileNifiProperties create/update the nifi.properties config file.
 func (r *Reconciler) reconcileNifiProperties(ctx context.Context, req ctrl.Request, nifi *bigdatav1alpha1.Nifi) error {
 	cm := newConfigMapNifiProperties(nifi)
 
+	// Check if the nifi.properties config file already exists to update or create it.
 	existingCM := &corev1.ConfigMap{}
 	if nifiutils.IsObjectFound(r.Client, nifi.Namespace, cm.Name, existingCM) {
 		if !reflect.DeepEqual(cm.Data, existingCM.Data) {
@@ -300,4 +315,13 @@ func (r *Reconciler) reconcileNifiProperties(ctx context.Context, req ctrl.Reque
 		return err
 	}
 	return r.Client.Create(ctx, cm)
+}
+
+// reconcileConfigMaps wrap every reconcile configmap function. This function should be called
+// from the main reconcile function
+func (r *Reconciler) reconcileConfigMaps(ctx context.Context, req ctrl.Request, nifi *bigdatav1alpha1.Nifi) error {
+	if err := r.reconcileNifiProperties(ctx, req, nifi); err != nil {
+		return err
+	}
+	return nil
 }

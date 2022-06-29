@@ -10,21 +10,22 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
+// newService returns a generic ClusterIP service for Nifi CRD
 func newService(nifi *bigdatav1alpha1.Nifi) *corev1.Service {
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      nifi.Name,
 			Namespace: nifi.Namespace,
-			Labels:    labelsForNifi(nifi.Name),
+			Labels:    nifiutils.LabelsForNifi(nifi.Name),
 		},
 	}
 
 }
 
-func (r *Reconciler) reconcileServices(ctx context.Context, req ctrl.Request, nifi *bigdatav1alpha1.Nifi) error {
-	svc := newService(nifi)
+// reconcileNifiUIService reconciles the ClusterIP Service for Nifi User Interface
+func (r *Reconciler) reconcileNifiUIService(ctx context.Context, svc *corev1.Service, nifi *bigdatav1alpha1.Nifi) error {
 	svc.Spec = corev1.ServiceSpec{
-		Selector: labelsForNifi(nifi.Name),
+		Selector: nifiutils.LabelsForNifi(nifi.Name),
 		Ports: []corev1.ServicePort{
 			{
 				Name:     nifiConsolePortName,
@@ -47,4 +48,16 @@ func (r *Reconciler) reconcileServices(ctx context.Context, req ctrl.Request, ni
 	}
 
 	return r.Client.Create(ctx, svc)
+}
+
+// reconcileServices reconciles every service resource for Nifi CRD
+func (r *Reconciler) reconcileServices(ctx context.Context, req ctrl.Request, nifi *bigdatav1alpha1.Nifi) error {
+	svc := newService(nifi)
+
+	// reconcile UI Service
+	if err := r.reconcileNifiUIService(ctx, svc, nifi); err != nil {
+		return err
+	}
+
+	return nil
 }
