@@ -3,8 +3,10 @@ package nifi
 import (
 	"context"
 	"reflect"
+	"sort"
 
 	bigdatav1alpha1 "github.com/RHEcosystemAppEng/nifi-operator/api/v1alpha1"
+	nifiutils "github.com/RHEcosystemAppEng/nifi-operator/controllers/nifiutils"
 	corev1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -19,6 +21,7 @@ func getPodNames(pods []corev1.Pod) []string {
 	return podNames
 }
 
+// reconcileStatus is used to reconcile the status of every Nifi CRD associated resource
 func (r *Reconciler) reconcileStatus(ctx context.Context, req ctrl.Request, nifi *bigdatav1alpha1.Nifi) error {
 	if err := r.reconcileNifiStatus(ctx, req, nifi); err != nil {
 		return err
@@ -26,19 +29,19 @@ func (r *Reconciler) reconcileStatus(ctx context.Context, req ctrl.Request, nifi
 	return nil
 }
 
-func (r *Reconciler) reconcileNifiStatus(ctx context.Context, req ctrl.Request, nifi *bigdatav1alpha1.Nifi) error {
+func (r *Reconciler) reconcileNifiStatusPodList(ctx context.Context, req ctrl.Request, nifi *bigdatav1alpha1.Nifi) error {
 	// Update the Nifi status with the pod names
-	// List the pods for this nifi's StatefulSet
 	podList := &corev1.PodList{}
 	listOpts := []client.ListOption{
 		client.InNamespace(nifi.Namespace),
-		client.MatchingLabels(labelsForNifi(nifi.Name)),
+		client.MatchingLabels(nifiutils.LabelsForNifi(nifi.Name)),
 	}
 	if err := r.List(ctx, podList, listOpts...); err != nil {
 		log.Error(err, "Failed to list pods", "Nifi.Namespace", nifi.Namespace, "Nifi.Name", nifi.Name)
 		return err
 	}
 	podNames := getPodNames(podList.Items)
+	sort.Strings(podNames)
 
 	// Update status.Nodes if needed
 	if !reflect.DeepEqual(podNames, nifi.Status.Nodes) {
@@ -50,5 +53,13 @@ func (r *Reconciler) reconcileNifiStatus(ctx context.Context, req ctrl.Request, 
 		}
 	}
 
+	return nil
+}
+
+// reconcileNifiStatus reconciles the status of the NiFi StatefulSet
+func (r *Reconciler) reconcileNifiStatus(ctx context.Context, req ctrl.Request, nifi *bigdatav1alpha1.Nifi) error {
+	if err := r.reconcileNifiStatusPodList(ctx, req, nifi); err != nil {
+		return err
+	}
 	return nil
 }
