@@ -18,6 +18,7 @@ package nifi
 import (
 	"context"
 	"reflect"
+	"sort"
 
 	bigdatav1alpha1 "github.com/RHEcosystemAppEng/nifi-operator/api/v1alpha1"
 	nifiutils "github.com/RHEcosystemAppEng/nifi-operator/controllers/nifiutils"
@@ -126,17 +127,17 @@ func getDefaultNifiProperties() *map[string]string {
 	nifiProperties["nifi.status.repository.questdb.persist.node.days"] = "14"
 	nifiProperties["nifi.status.repository.questdb.persist.component.days"] = "3"
 	nifiProperties["nifi.status.repository.questdb.persist.location"] = "./status_repository"
-	nifiProperties["nifi.remote.input.host"] = "nifi-sample-0"
-	nifiProperties["nifi.remote.input.secure"] = "true"
-	nifiProperties["nifi.remote.input.socket.port"] = "10000"
+	nifiProperties["nifi.remote.input.host"] = ""
+	nifiProperties["nifi.remote.input.secure"] = "false"
+	nifiProperties["nifi.remote.input.socket.port"] = ""
 	nifiProperties["nifi.remote.input.http.enabled"] = "true"
 	nifiProperties["nifi.remote.input.http.transaction.ttl"] = "30 sec"
 	nifiProperties["nifi.remote.contents.cache.expiration"] = "30 secs"
 	nifiProperties["nifi.web.http.host"] = ""
-	nifiProperties["nifi.web.http.port"] = ""
+	nifiProperties["nifi.web.http.port"] = "8080"
 	nifiProperties["nifi.web.http.network.interface.default"] = ""
-	nifiProperties["nifi.web.https.host"] = "0.0.0.0"
-	nifiProperties["nifi.web.https.port"] = "8443"
+	nifiProperties["nifi.web.https.host"] = "127.0.0.1"
+	nifiProperties["nifi.web.https.port"] = ""
 	nifiProperties["nifi.web.https.network.interface.default"] = ""
 	nifiProperties["nifi.web.jetty.working.directory"] = "./work/jetty"
 	nifiProperties["nifi.web.jetty.threads"] = "200"
@@ -149,10 +150,10 @@ func getDefaultNifiProperties() *map[string]string {
 	nifiProperties["nifi.web.request.timeout"] = "60 secs"
 	nifiProperties["nifi.web.request.ip.whitelist"] = ""
 	nifiProperties["nifi.web.should.send.server.version"] = "true"
-	nifiProperties["nifi.web.request.log.format"] = "%{client}a - %u %t \"%r\" %s %O \"%{Referer}i\" \"%{User-Agent}i\""
+	nifiProperties["nifi.web.request.log.format"] = `%{client}a - %u %t "%r" %s %O "%{Referer}i" "%{User-Agent}i"`
 	nifiProperties["nifi.web.https.ciphersuites.include"] = ""
 	nifiProperties["nifi.web.https.ciphersuites.exclude"] = ""
-	nifiProperties["nifi.sensitive.props.key"] = "TzzT/ZbzY1vIsM3T3caxvNpjJmNeQRL5"
+	nifiProperties["nifi.sensitive.props.key"] = "2mMMGFpjGyJxqOT79ev34RSg5coZCscp"
 	nifiProperties["nifi.sensitive.props.key.protected"] = ""
 	nifiProperties["nifi.sensitive.props.algorithm"] = "NIFI_PBKDF2_AES_GCM_256"
 	nifiProperties["nifi.sensitive.props.additional.keys"] = ""
@@ -160,11 +161,11 @@ func getDefaultNifiProperties() *map[string]string {
 	nifiProperties["nifi.security.autoreload.interval"] = "10 secs"
 	nifiProperties["nifi.security.keystore"] = "./conf/keystore.p12"
 	nifiProperties["nifi.security.keystoreType"] = "PKCS12"
-	nifiProperties["nifi.security.keystorePasswd"] = "86bf21e743f9e459911916e8f732e86d"
-	nifiProperties["nifi.security.keyPasswd"] = "86bf21e743f9e459911916e8f732e86d"
+	nifiProperties["nifi.security.keystorePasswd"] = "a4d8979317d4332a19bf5979889a58ef"
+	nifiProperties["nifi.security.keyPasswd"] = "a4d8979317d4332a19bf5979889a58ef"
 	nifiProperties["nifi.security.truststore"] = "./conf/truststore.p12"
 	nifiProperties["nifi.security.truststoreType"] = "PKCS12"
-	nifiProperties["nifi.security.truststorePasswd"] = "56e1b852671e334bf69188d296632ef2"
+	nifiProperties["nifi.security.truststorePasswd"] = "266391028ff8ba8d7807326f5b0d19b9"
 	nifiProperties["nifi.security.user.authorizer"] = "single-user-authorizer"
 	nifiProperties["nifi.security.allow.anonymous.authentication"] = "false"
 	nifiProperties["nifi.security.user.login.identity.provider"] = "single-user-provider"
@@ -189,10 +190,7 @@ func getDefaultNifiProperties() *map[string]string {
 	nifiProperties["nifi.security.user.saml.sp.entity.id"] = ""
 	nifiProperties["nifi.security.user.saml.identity.attribute.name"] = ""
 	nifiProperties["nifi.security.user.saml.group.attribute.name"] = ""
-	nifiProperties["nifi.security.user.saml.metadata.signing.enabled"] = "falsenifi.cluster.flow.election.max.candidates="
-	nifiProperties["nifi.cluster.load.balance.host"] = ""
-	nifiProperties["nifi.cluster.load.balance.port"] = "6342"
-	nifiProperties["nifi.nar.library.provider.nifi-registry.implementation"] = "org.apache.nifi.registry.extension.NiFiRegistryNarProvider"
+	nifiProperties["nifi.security.user.saml.metadata.signing.enabled"] = "false"
 	nifiProperties["nifi.security.user.saml.request.signing.enabled"] = "false"
 	nifiProperties["nifi.security.user.saml.want.assertions.signed"] = "true"
 	nifiProperties["nifi.security.user.saml.signature.algorithm"] = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"
@@ -206,9 +204,9 @@ func getDefaultNifiProperties() *map[string]string {
 	nifiProperties["nifi.listener.bootstrap.port"] = "0"
 	nifiProperties["nifi.cluster.protocol.heartbeat.interval"] = "5 sec"
 	nifiProperties["nifi.cluster.protocol.heartbeat.missable.max"] = "8"
-	nifiProperties["nifi.cluster.protocol.is.secure"] = "true"
+	nifiProperties["nifi.cluster.protocol.is.secure"] = "false"
 	nifiProperties["nifi.cluster.is.node"] = "false"
-	nifiProperties["nifi.cluster.node.address"] = "nifi-sample-0"
+	nifiProperties["nifi.cluster.node.address"] = ""
 	nifiProperties["nifi.cluster.node.protocol.port"] = ""
 	nifiProperties["nifi.cluster.node.protocol.max.threads"] = "50"
 	nifiProperties["nifi.cluster.node.event.history.size"] = "25"
@@ -258,31 +256,14 @@ func getDefaultNifiProperties() *map[string]string {
 	nifiProperties["nifi.diagnostics.on.shutdown.directory"] = "./diagnostics"
 	nifiProperties["nifi.diagnostics.on.shutdown.max.filecount"] = "10"
 	nifiProperties["nifi.diagnostics.on.shutdown.max.directory.size"] = "10 MB"
-	nifiProperties["nifi.nar.library.provider.hdfs.implementation"] = "org.apache.nifi.nar.hadoop.HDFSNarProvider"
-	nifiProperties["nifi.nar.library.provider.hdfs.resources"] = "/path/to/core-site.xml,/path/to/hdfs-site.xml"
-	nifiProperties["nifi.nar.library.provider.nifi-registry.implementation"] = "org.apache.nifi.registry.extension.NiFiRegistryNarProvider"
 
 	return &nifiProperties
-}
-
-// enableNifiEmbeddedZookeeper checks depending of the number of Nifi Size if
-// the embedded Zookeeper should be enabled or not
-func enableNifiEmbeddedZookeeper(cm *map[string]string, nifi *bigdatav1alpha1.Nifi) {
-	if nifi.Spec.Size <= 1 {
-		(*cm)["nifi.state.management.embedded.zookeeper.start"] = "false"
-	} else {
-		(*cm)["nifi.state.management.embedded.zookeeper.start"] = "true"
-	}
 }
 
 // getNifiProperties returns every nifi.properties file's parameter already
 // updated with the Nifi CRD config definition
 func getNifiProperties(nifi *bigdatav1alpha1.Nifi) *map[string]string {
 	nifiConf := getDefaultNifiProperties()
-
-	// Dis/Enable Nifi's Embedded Zookeeper
-	enableNifiEmbeddedZookeeper(nifiConf, nifi)
-
 	// Disable embedded Zookeeper if Nifi has only one instance
 	return nifiConf
 }
@@ -297,10 +278,18 @@ func newConfigMapNifiProperties(nifi *bigdatav1alpha1.Nifi) *corev1.ConfigMap {
 	nifiConf := getNifiProperties(nifi)
 	strConf := ""
 
+	// Needed to get and sort the keys to always return the same ConfigMap
+	// content order and avoid infinite reconciling loops
+	keys := make([]string, 0)
+	for k := range *nifiConf {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
 	// Concat every map value with its key in .conf file format to generate the
 	// nifi.properties file content
-	for key, value := range *nifiConf {
-		strConf += key + "=" + value + "\n"
+	for _, key := range keys {
+		strConf += key + "=" + (*nifiConf)[key] + "\n"
 	}
 
 	// Assign Config Map Data field to store the nifi.properties file
@@ -316,12 +305,19 @@ func (r *Reconciler) reconcileNifiProperties(ctx context.Context, req ctrl.Reque
 	cm := newConfigMapNifiProperties(nifi)
 
 	// Check if the nifi.properties config file already exists to update or create it.
-	existingCM := &corev1.ConfigMap{}
+	existingCM := newConfigMapWithName(nifi.Name+nifiPropertiesConfigMapNameSuffix, nifi)
 	if nifiutils.IsObjectFound(r.Client, nifi.Namespace, cm.Name, existingCM) {
+		changed := false
+
 		if !reflect.DeepEqual(cm.Data, existingCM.Data) {
 			existingCM.Data = cm.Data
+			changed = true
+		}
+
+		if changed {
 			return r.Client.Update(ctx, existingCM)
 		}
+
 		return nil
 	}
 
@@ -329,6 +325,7 @@ func (r *Reconciler) reconcileNifiProperties(ctx context.Context, req ctrl.Reque
 	if err := ctrl.SetControllerReference(nifi, cm, r.Scheme); err != nil {
 		return err
 	}
+
 	return r.Client.Create(ctx, cm)
 }
 

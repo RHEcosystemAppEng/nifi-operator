@@ -17,6 +17,8 @@ package nifi
 
 import (
 	"context"
+	"errors"
+	"reflect"
 
 	bigdatav1alpha1 "github.com/RHEcosystemAppEng/nifi-operator/api/v1alpha1"
 	nifiutils "github.com/RHEcosystemAppEng/nifi-operator/controllers/nifiutils"
@@ -26,8 +28,66 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-// getEnvVars generate the Environment Vars to apply to Nifi instance
-func (r *Reconciler) getEnvVars(nifi *bigdatav1alpha1.Nifi) *[]corev1.EnvVar {
+// getHTTPModeConfig returns the proper env variables to configure a serving HTTP instance
+func getHTTPModeConfig() []corev1.EnvVar {
+	envVars := []corev1.EnvVar{}
+	envVars = append(envVars, corev1.EnvVar{
+		Name:  "NIFI_WEB_HTTP_PORT",
+		Value: "8080",
+	})
+	envVars = append(envVars, corev1.EnvVar{
+		Name:  "NIFI_REMOTE_INPUT_SECURE",
+		Value: "false",
+	})
+	return envVars
+}
+
+func getHTTPSModeConfig() []corev1.EnvVar {
+	envVars := []corev1.EnvVar{}
+
+	envVars = append(envVars, corev1.EnvVar{
+		Name:  "NIFI_WEB_HTTPS_PORT",
+		Value: "8443",
+	})
+	envVars = append(envVars, corev1.EnvVar{
+		Name:  "NIFI_REMOTE_INPUT_SECURE",
+		Value: "true",
+	})
+	return envVars
+}
+func getRouteHostnameConfig(nifi *bigdatav1alpha1.Nifi) []corev1.EnvVar {
+	envVars := []corev1.EnvVar{}
+	var proxyHost string
+
+	if len(nifi.Spec.Console.RouteHostname) > 0 {
+		proxyHost = nifi.Spec.Console.RouteHostname
+	} else {
+		proxyHost = nifi.Status.UIRoute
+	}
+
+	envVars = append(envVars, corev1.EnvVar{
+		Name:  "NIFI_WEB_PROXY_HOST",
+		Value: proxyHost,
+	})
+
+	return envVars
+}
+
+func getConsoleSpec(nifi *bigdatav1alpha1.Nifi) []corev1.EnvVar {
+	envVars := []corev1.EnvVar{}
+	if nifi.Spec.Console.Expose {
+		if nifiutils.IsConsoleProtocolHTTP(nifi) {
+			envVars = append(envVars, getHTTPModeConfig()...)
+		} else if nifiutils.IsConsoleProtocolHTTPS(nifi) {
+			envVars = append(envVars, getHTTPSModeConfig()...)
+		}
+		envVars = append(envVars, getRouteHostnameConfig(nifi)...)
+		return envVars
+	}
+	return nil
+}
+
+func getCredentials(nifi *bigdatav1alpha1.Nifi) []corev1.EnvVar {
 	envVars := []corev1.EnvVar{}
 	if nifi.Spec.UseDefaultCredentials {
 		envVars = append(envVars, corev1.EnvVar{
@@ -38,6 +98,19 @@ func (r *Reconciler) getEnvVars(nifi *bigdatav1alpha1.Nifi) *[]corev1.EnvVar {
 			Name:  "SINGLE_USER_CREDENTIALS_PASSWORD",
 			Value: nifiDefaultPassword,
 		})
+		return envVars
+	}
+	return nil
+}
+
+// getEnvVars generate the Environment Vars to apply to Nifi instance
+func (r *Reconciler) getEnvVars(nifi *bigdatav1alpha1.Nifi) *[]corev1.EnvVar {
+	envVars := []corev1.EnvVar{}
+	if newVars := getConsoleSpec(nifi); newVars != nil {
+		envVars = append(envVars, newVars...)
+	}
+	if newVars := getCredentials(nifi); newVars != nil {
+		envVars = append(envVars, newVars...)
 	}
 	return &envVars
 }
@@ -48,6 +121,17 @@ func (r *Reconciler) reconcileStatefulSet(ctx context.Context, req ctrl.Request,
 	envVars := r.getEnvVars(nifi)
 	ssUser := nifiUser
 	npam := nifiPropertiesAccessMode
+	var nifiConsolePort int32
+
+	if nifiutils.IsConsoleProtocolHTTP(nifi) {
+		nifiConsolePort = nifiHTTPConsolePort
+	} else if nifiutils.IsConsoleProtocolHTTPS(nifi) {
+		nifiConsolePort = nifiHTTPSConsolePort
+	} else {
+		err := errors.New("Console Protocol Invalid")
+		log.Error(err, "")
+		return err
+	}
 
 	ss := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -72,9 +156,17 @@ func (r *Reconciler) reconcileStatefulSet(ctx context.Context, req ctrl.Request,
 						},
 					},
 					Containers: []corev1.Container{{
-						Image: nifiImageRepo + nifiVersion,
-						Name:  "nifi",
-						Env:   *envVars,
+						Image:   nifiImageRepo + nifiVersion,
+						Name:    "nifi",
+						Env:     *envVars,
+						Command: []string{"/bin/sh", "-c"},
+						Args: []string{
+							`cp ./conf/cm/nifi.properties ./conf/nifi.properties.new ;
+							../scripts/start.sh ;
+							echo "broke" ;
+							sleep 3600 ;
+							echo 'finish'; 
+							`},
 						SecurityContext: &corev1.SecurityContext{
 							RunAsNonRoot:             &[]bool{true}[0],
 							AllowPrivilegeEscalation: &[]bool{false}[0],
@@ -102,7 +194,7 @@ func (r *Reconciler) reconcileStatefulSet(ctx context.Context, req ctrl.Request,
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
 									LocalObjectReference: corev1.LocalObjectReference{
-										Name: "nifi-properties",
+										Name: nifi.Name + nifiPropertiesConfigMapNameSuffix,
 									},
 									DefaultMode: &npam,
 								},
@@ -115,13 +207,24 @@ func (r *Reconciler) reconcileStatefulSet(ctx context.Context, req ctrl.Request,
 	}
 
 	// Check if the StatefulSet exists
-	existingSS := &appsv1.StatefulSet{}
+	existingSS := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      nifi.Name,
+			Namespace: nifi.Namespace,
+		},
+	}
 	if nifiutils.IsObjectFound(r.Client, nifi.Namespace, ss.Name, existingSS) {
 		changed := false
 
 		// Check Nifi.Spec.Size
-		if &nifi.Spec.Size != existingSS.Spec.Replicas {
-			existingSS.Spec.Replicas = &nifi.Spec.Size
+		if !reflect.DeepEqual(ss.Spec.Replicas, existingSS.Spec.Replicas) {
+			existingSS.Spec.Replicas = ss.Spec.Replicas
+			changed = true
+		}
+
+		// Check Nifi.Spec.Size
+		if !reflect.DeepEqual(ss.Spec.Template.Spec.Containers, existingSS.Spec.Template.Spec.Containers) {
+			existingSS.Spec.Template.Spec.Containers = ss.Spec.Template.Spec.Containers
 			changed = true
 		}
 
@@ -130,6 +233,7 @@ func (r *Reconciler) reconcileStatefulSet(ctx context.Context, req ctrl.Request,
 			log.Info("Updating Nifi StatefulSet")
 			return r.Client.Update(ctx, existingSS)
 		}
+
 		return nil
 	}
 
@@ -137,5 +241,6 @@ func (r *Reconciler) reconcileStatefulSet(ctx context.Context, req ctrl.Request,
 	if err := ctrl.SetControllerReference(nifi, ss, r.Scheme); err != nil {
 		return err
 	}
+
 	return r.Client.Create(ctx, ss)
 }

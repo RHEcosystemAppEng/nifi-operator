@@ -1,7 +1,49 @@
+---
 apiVersion: bigdata.quay.io/v1alpha1
 kind: Nifi
 metadata:
-  name: nifi-sample
+  name: nifi-http
 spec:
   size: 1
   useDefaultCredentials: true
+  console:
+    expose: true
+    protocol: "http"
+    routeHostname: "nifi-insecure-console-avillega-nifi.apps.ocp-dev01.lab.eng.tlv2.redhat.com"
+
+---
+apiVersion: bigdata.quay.io/v1alpha1
+kind: Nifi
+metadata:
+  name: nifi-https
+spec:
+  size: 1
+  useDefaultCredentials: true
+  console:
+    expose: true
+    protocol: "https"
+    routeHostname: "nifi-secure-console-avillega-nifi.apps.ocp-dev01.lab.eng.tlv2.redhat.com"
+
+---
+apiVersion: bigdata.quay.io/v1alpha1
+kind: Nifi
+metadata:
+  name: nifi-nohostname-http
+spec:
+  size: 1
+  useDefaultCredentials: true
+  console:
+    expose: true
+    protocol: "http"
+
+---
+apiVersion: bigdata.quay.io/v1alpha1
+kind: Nifi
+metadata:
+  name: nifi-nohostname-https
+spec:
+  size: 1
+  useDefaultCredentials: true
+  console:
+    expose: true
+    protocol: "https"
