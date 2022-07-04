@@ -1,7 +1,24 @@
+/*
+Copyright 2022.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package nifi
 
 import (
 	"context"
+	"errors"
+	"reflect"
 
 	bigdatav1alpha1 "github.com/RHEcosystemAppEng/nifi-operator/api/v1alpha1"
 	nifiutils "github.com/RHEcosystemAppEng/nifi-operator/controllers/nifiutils"
@@ -11,28 +28,31 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-// getEnvVars generate the Environment Vars to apply to Nifi instance
-func (r *Reconciler) getEnvVars(nifi *bigdatav1alpha1.Nifi) *[]corev1.EnvVar {
-	envVars := []corev1.EnvVar{}
-	if nifi.Spec.UseDefaultCredentials {
-		envVars = append(envVars, corev1.EnvVar{
-			Name:  "SINGLE_USER_CREDENTIALS_USERNAME",
-			Value: nifiDefaultUser,
-		})
-		envVars = append(envVars, corev1.EnvVar{
-			Name:  "SINGLE_USER_CREDENTIALS_PASSWORD",
-			Value: nifiDefaultPassword,
-		})
-	}
-	return &envVars
-}
-
 // reconcileStatefulSet reconciles the StatefulSet to deploy Nifi instances
 func (r *Reconciler) reconcileStatefulSet(ctx context.Context, req ctrl.Request, nifi *bigdatav1alpha1.Nifi) error {
 	ls := nifiutils.LabelsForNifi(nifi.Name)
-	envVars := r.getEnvVars(nifi)
 	ssUser := nifiUser
 	npam := nifiPropertiesAccessMode
+	var nifiConsolePort int32
+	envFromSources := []corev1.EnvFromSource{
+		{
+			ConfigMapRef: &corev1.ConfigMapEnvSource{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: getNifiPropertiesConfigMapName(nifi),
+				},
+			},
+		},
+	}
+
+	if nifiutils.IsConsoleProtocolHTTP(nifi) {
+		nifiConsolePort = nifiHTTPConsolePort
+	} else if nifiutils.IsConsoleProtocolHTTPS(nifi) {
+		nifiConsolePort = nifiHTTPSConsolePort
+	} else {
+		err := errors.New("Console Protocol Invalid")
+		log.Error(err, "")
+		return err
+	}
 
 	ss := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -57,9 +77,15 @@ func (r *Reconciler) reconcileStatefulSet(ctx context.Context, req ctrl.Request,
 						},
 					},
 					Containers: []corev1.Container{{
-						Image: nifiImageRepo + nifiVersion,
-						Name:  "nifi",
-						Env:   *envVars,
+						Image:   nifiImageRepo + nifiVersion,
+						Name:    "nifi",
+						EnvFrom: envFromSources,
+						Command: []string{"/bin/sh", "-c"},
+						Args: []string{
+							`
+							env
+							bash -x ../scripts/start.sh ;
+							`},
 						SecurityContext: &corev1.SecurityContext{
 							RunAsNonRoot:             &[]bool{true}[0],
 							AllowPrivilegeEscalation: &[]bool{false}[0],
@@ -87,7 +113,7 @@ func (r *Reconciler) reconcileStatefulSet(ctx context.Context, req ctrl.Request,
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
 									LocalObjectReference: corev1.LocalObjectReference{
-										Name: "nifi-properties",
+										Name: nifi.Name + nifiPropertiesConfigMapNameSuffix,
 									},
 									DefaultMode: &npam,
 								},
@@ -100,13 +126,24 @@ func (r *Reconciler) reconcileStatefulSet(ctx context.Context, req ctrl.Request,
 	}
 
 	// Check if the StatefulSet exists
-	existingSS := &appsv1.StatefulSet{}
+	existingSS := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      nifi.Name,
+			Namespace: nifi.Namespace,
+		},
+	}
 	if nifiutils.IsObjectFound(r.Client, nifi.Namespace, ss.Name, existingSS) {
 		changed := false
 
 		// Check Nifi.Spec.Size
-		if &nifi.Spec.Size != existingSS.Spec.Replicas {
-			existingSS.Spec.Replicas = &nifi.Spec.Size
+		if !reflect.DeepEqual(ss.Spec.Replicas, existingSS.Spec.Replicas) {
+			existingSS.Spec.Replicas = ss.Spec.Replicas
+			changed = true
+		}
+
+		// Check Nifi.Spec.Size
+		if !reflect.DeepEqual(ss.Spec.Template.Spec.Containers, existingSS.Spec.Template.Spec.Containers) {
+			existingSS.Spec.Template.Spec.Containers = ss.Spec.Template.Spec.Containers
 			changed = true
 		}
 
@@ -115,6 +152,7 @@ func (r *Reconciler) reconcileStatefulSet(ctx context.Context, req ctrl.Request,
 			log.Info("Updating Nifi StatefulSet")
 			return r.Client.Update(ctx, existingSS)
 		}
+
 		return nil
 	}
 
@@ -122,5 +160,6 @@ func (r *Reconciler) reconcileStatefulSet(ctx context.Context, req ctrl.Request,
 	if err := ctrl.SetControllerReference(nifi, ss, r.Scheme); err != nil {
 		return err
 	}
+
 	return r.Client.Create(ctx, ss)
 }

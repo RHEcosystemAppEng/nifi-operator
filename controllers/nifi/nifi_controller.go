@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	bigdatav1alpha1 "github.com/RHEcosystemAppEng/nifi-operator/api/v1alpha1"
+	routev1 "github.com/openshift/api/route/v1"
 )
 
 var log = ctrllog.Log.WithName("Nifi-Controller")
@@ -57,14 +58,21 @@ const (
 
 	// nifiConsolePortName names the port for Nifi console
 	nifiConsolePortName = "nifi-console"
-	// nifiConsolePort specify the port for Nifi console
-	nifiConsolePort = 8443
+	// nifiHTTPConsolePort specify the port for Nifi console
+	nifiHTTPConsolePort = 8080
+	// nifiHTTPSConsolePort specify the port for Nifi console
+	nifiHTTPSConsolePort = 8443
 )
 
 // reconcileResources will reconcile every Nifi CRD associated resource
 func (r *Reconciler) reconcileResources(ctx context.Context, req ctrl.Request, nifi *bigdatav1alpha1.Nifi) error {
 	log.Info("Reconciling Status")
 	if err := r.reconcileStatus(ctx, req, nifi); err != nil {
+		return err
+	}
+
+	log.Info("Reconciling Routes")
+	if err := r.reconcileRoutes(ctx, req, nifi); err != nil {
 		return err
 	}
 
@@ -124,10 +132,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&bigdatav1alpha1.Nifi{}).
+	if err := routev1.AddToScheme(mgr.GetScheme()); err != nil {
+		log.Error(err, "")
+	}
+	controller := ctrl.NewControllerManagedBy(mgr)
+	controller.For(&bigdatav1alpha1.Nifi{}).
 		Owns(&appsv1.StatefulSet{}).
 		Owns(&v1.Service{}).
 		Owns(&v1.ConfigMap{}).
-		Complete(r)
+		Owns(&routev1.Route{})
+	return controller.Complete(r)
 }

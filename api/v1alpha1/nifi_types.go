@@ -20,6 +20,20 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// NifiConsoleSpec contains the Nifi Console configuration
+type NifiConsoleSpec struct {
+	//+kubebuilder:validation:Required
+	Expose bool `json:"expose"`
+
+	//+kubebuilder:validation:Required
+	//+kubebuilder:validation:Pattern=^http|HTTP|https|HTTPS$
+	//+kubebuilder:default:http
+	Protocol string `json:"protocol"`
+
+	//+kubebuilder:validation:Optional
+	RouteHostname string `json:"routeHostname"`
+}
+
 // NifiSpec defines the desired state of Nifi
 type NifiSpec struct {
 	//+kubebuilder:validation:Minimum=0
@@ -31,12 +45,18 @@ type NifiSpec struct {
 	//+kubebuilder:validation:Required
 	// UseDefaultCredentials defines if Nifi should be configured with the Single User default Credentials
 	UseDefaultCredentials bool `json:"useDefaultCredentials"`
+
+	//+kubebuilder:validation:Required
+	Console NifiConsoleSpec `json:"console"`
 }
 
 // NifiStatus defines the observed state of Nifi
 type NifiStatus struct {
 	// Nodes are the names of the nifi pods
 	Nodes []string `json:"nodes"`
+
+	// UI Route reference
+	UIRoute string `json:"uiRoute"`
 }
 
 // Nifi is the Schema for the nifis API

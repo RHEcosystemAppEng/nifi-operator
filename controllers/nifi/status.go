@@ -1,3 +1,18 @@
+/*
+Copyright 2022.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package nifi
 
 import (
@@ -12,6 +27,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// getUIService returns the name of the UI service used by the current instance of Nifi CRD
+func getUIService(nifi *bigdatav1alpha1.Nifi) string {
+	return newUIService(nifi).Name
+}
+
 // getPodNames returns the pod names of the array of pods passed in
 func getPodNames(pods []corev1.Pod) []string {
 	var podNames []string
@@ -21,11 +41,16 @@ func getPodNames(pods []corev1.Pod) []string {
 	return podNames
 }
 
-// reconcileStatus is used to reconcile the status of every Nifi CRD associated resource
-func (r *Reconciler) reconcileStatus(ctx context.Context, req ctrl.Request, nifi *bigdatav1alpha1.Nifi) error {
-	if err := r.reconcileNifiStatus(ctx, req, nifi); err != nil {
-		return err
+func (r *Reconciler) reconcileNifiUIRouteHostname(ctx context.Context, req ctrl.Request, nifi *bigdatav1alpha1.Nifi) error {
+	existingRT := newUIRoute(nifi)
+	if nifiutils.IsObjectFound(r.Client, nifi.Namespace, existingRT.Name, existingRT) {
+		if existingRT.Spec.Host != nifi.Status.UIRoute {
+			nifi.Status.UIRoute = existingRT.Spec.Host
+			r.Status().Update(ctx, nifi)
+			return nil
+		}
 	}
+
 	return nil
 }
 
@@ -59,6 +84,19 @@ func (r *Reconciler) reconcileNifiStatusPodList(ctx context.Context, req ctrl.Re
 // reconcileNifiStatus reconciles the status of the NiFi StatefulSet
 func (r *Reconciler) reconcileNifiStatus(ctx context.Context, req ctrl.Request, nifi *bigdatav1alpha1.Nifi) error {
 	if err := r.reconcileNifiStatusPodList(ctx, req, nifi); err != nil {
+		return err
+	}
+
+	if err := r.reconcileNifiUIRouteHostname(ctx, req, nifi); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// reconcileStatus is used to reconcile the status of every Nifi CRD associated resource
+func (r *Reconciler) reconcileStatus(ctx context.Context, req ctrl.Request, nifi *bigdatav1alpha1.Nifi) error {
+	if err := r.reconcileNifiStatus(ctx, req, nifi); err != nil {
 		return err
 	}
 	return nil
