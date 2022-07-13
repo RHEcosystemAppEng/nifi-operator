@@ -25,15 +25,27 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
-// reconcileStatefulSet reconciles the StatefulSet to deploy Nifi instances
+const (
+	readinessProbeDelay      = 60
+	readinessProbePeriod     = 20
+	livenessProbeDelay       = 30
+	probeCommand         string = "/opt/nifi/nifi-current/run/nifi.pid"
+)
+
+// reconcileStatefulSet reconciles the StatefulSet to deploy Nifi instances.
 func (r *Reconciler) reconcileStatefulSet(ctx context.Context, req ctrl.Request, nifi *bigdatav1alpha1.Nifi) error {
+	var (
+		nifiConsolePort       int
+		readinessProbeHandler corev1.ProbeHandler
+	)
+
 	ls := nifiutils.LabelsForNifi(nifi.Name)
 	ssUser := nifiUser
 	npam := nifiPropertiesAccessMode
-	var nifiConsolePort int32
 	envFromSources := []corev1.EnvFromSource{
 		{
 			ConfigMapRef: &corev1.ConfigMapEnvSource{
@@ -46,11 +58,27 @@ func (r *Reconciler) reconcileStatefulSet(ctx context.Context, req ctrl.Request,
 
 	if nifiutils.IsConsoleProtocolHTTP(nifi) {
 		nifiConsolePort = nifiHTTPConsolePort
+		readinessProbeHandler = corev1.ProbeHandler{
+			HTTPGet: &corev1.HTTPGetAction{
+				Path: "nifi-api/system-diagnostics",
+				// Use a numeric value because the request send pod IP.
+				Port: intstr.FromInt(nifiConsolePort),
+			},
+		}
 	} else if nifiutils.IsConsoleProtocolHTTPS(nifi) {
 		nifiConsolePort = nifiHTTPSConsolePort
+		readinessProbeHandler = corev1.ProbeHandler{
+			HTTPGet: &corev1.HTTPGetAction{
+				Path: "nifi-api/system-diagnostics",
+				// Use a numeric value because the request send pod IP.
+				Port:   intstr.FromInt(nifiConsolePort),
+				Scheme: "HTTPS",
+			},
+		}
 	} else {
 		err := errors.New("Console Protocol Invalid")
 		log.Error(err, "")
+
 		return err
 	}
 
@@ -85,7 +113,8 @@ func (r *Reconciler) reconcileStatefulSet(ctx context.Context, req ctrl.Request,
 							`
 							env
 							bash -x ../scripts/start.sh ;
-							`},
+							`,
+						},
 						SecurityContext: &corev1.SecurityContext{
 							RunAsNonRoot:             &[]bool{true}[0],
 							AllowPrivilegeEscalation: &[]bool{false}[0],
@@ -97,8 +126,21 @@ func (r *Reconciler) reconcileStatefulSet(ctx context.Context, req ctrl.Request,
 						},
 						Ports: []corev1.ContainerPort{{
 							Name:          nifiConsolePortName,
-							ContainerPort: nifiConsolePort,
+							ContainerPort: int32(nifiConsolePort),
 						}},
+						LivenessProbe: &corev1.Probe{
+							InitialDelaySeconds: int32(livenessProbeDelay),
+							ProbeHandler: corev1.ProbeHandler{
+								Exec: &corev1.ExecAction{
+									Command: []string{"test", probeCommand},
+								},
+							},
+						},
+						ReadinessProbe: &corev1.Probe{
+							InitialDelaySeconds: int32(readinessProbeDelay),
+							PeriodSeconds:       int32(readinessProbePeriod),
+							ProbeHandler:        readinessProbeHandler,
+						},
 						VolumeMounts: []corev1.VolumeMount{
 							{
 								Name:      "nifi-properties",
@@ -150,6 +192,7 @@ func (r *Reconciler) reconcileStatefulSet(ctx context.Context, req ctrl.Request,
 		// Update Nifi's StatefulSet if it was modified
 		if changed {
 			log.Info("Updating Nifi StatefulSet")
+
 			return r.Client.Update(ctx, existingSS)
 		}
 
