@@ -98,11 +98,13 @@ func (r *Reconciler) reconcileResources(ctx context.Context, req ctrl.Request, n
 //+kubebuilder:rbac:groups=bigdata.quay.io,resources=nifis,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=bigdata.quay.io,resources=nifis/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=bigdata.quay.io,resources=nifis/finalizers,verbs=update
+//+kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;delete
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	rlog := ctrllog.FromContext(ctx, "namespace", req.Namespace, "name", req.Name)
 	rlog.Info("Reconciling Nifi instance: ")
