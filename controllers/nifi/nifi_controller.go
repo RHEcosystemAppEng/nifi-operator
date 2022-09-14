@@ -103,10 +103,9 @@ func (r *Reconciler) reconcileResources(ctx context.Context, req ctrl.Request, n
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;delete
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
-
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	rlog := ctrllog.FromContext(ctx, "namespace", req.Namespace, "name", req.Name)
-	rlog.Info("Reconciling Nifi instance")
+	rlog.Info("Reconciling Nifi instance: ")
 
 	nifi := &bigdatav1alpha1.Nifi{}
 	err := r.Get(ctx, req.NamespacedName, nifi)

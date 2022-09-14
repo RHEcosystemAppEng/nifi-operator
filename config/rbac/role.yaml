@@ -18,9 +18,9 @@ rules:
   - update
   - watch
 - apiGroups:
-  - bigdata.quay.io
+  - apps
   resources:
-  - nifi
+  - statefulsets
   verbs:
   - create
   - delete
@@ -32,13 +32,25 @@ rules:
 - apiGroups:
   - bigdata.quay.io
   resources:
-  - nifi/finalizers
+  - nifis
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - bigdata.quay.io
+  resources:
+  - nifis/finalizers
   verbs:
   - update
 - apiGroups:
   - bigdata.quay.io
   resources:
-  - nifi/status
+  - nifis/status
   verbs:
   - get
   - patch
@@ -46,8 +58,30 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - configmaps
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - pods
   verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - create
+  - delete
   - get
   - list
   - watch
