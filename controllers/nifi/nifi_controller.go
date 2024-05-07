@@ -43,14 +43,27 @@ type Reconciler struct {
 }
 
 const (
+	// TODO: move to golang 1.21
+	// TODO: Update/Review dependencies
+	// TODO: Include dependency-bot "dependa-bot" / "snyk" (upstream)
+	// TODO: include "security.md" file specifying come back to me if someone detecs any problem
+	// TODO: include go.mod/go.sum and vendor folder in a separate commit
+	// TODO: rename "hack" folder to "scripts"
+	// TODO: Include vendor folder in the repo
+	// TODO: Check backstage operator
+	// TODO: ZOOKEEPER make it configurable and give the chance to include a reference to an external zookeeper
 	// nifiImageRepo sets the repo URL for the Nifi image
+	// TODO: Make it configurable for the user
 	nifiImageRepo = "docker.io/apache/nifi"
 	// nifiVersion sets the version for the Nifi Image
 	nifiVersion = ":1.16.3"
 	// nifiUser internal user ID for nifi
+	// Include SA+SCC in the operator
 	nifiUser = int64(1000)
 	// nifiPropertiesAccessMode establish the internal unix permissions for 'nifi.properties' file
 	nifiPropertiesAccessMode = int32(420)
+	// TODO: move this to a secret
+	// TODO: generate random password instead of definning it on the code
 	// nifiDefaultUser sets Single User Access Username
 	nifiDefaultUser = "administrator"
 	// nifiDefaultUser sets Single User Access Password
@@ -58,10 +71,12 @@ const (
 
 	// nifiConsolePortName names the port for Nifi console
 	nifiConsolePortName = "nifi-console"
-	// nifiHTTPConsolePort specify the port for Nifi console
-	nifiHTTPConsolePort = 8080
-	// nifiHTTPSConsolePort specify the port for Nifi console
-	nifiHTTPSConsolePort = 8443
+	// nifiConsolePort specify the port for Nifi console
+	nifiConsolePort = 8080
+	// TODO: add API check looking for Route CR exists
+
+	// TODO: monitor memory usage
+	// TODO: Configure resources.requests/limits for each Nifi instance. Configure default values too
 )
 
 // reconcileResources will reconcile every Nifi CRD associated resource
@@ -95,16 +110,16 @@ func (r *Reconciler) reconcileResources(ctx context.Context, req ctrl.Request, n
 }
 
 // Reconcile loop function
-//+kubebuilder:rbac:groups=bigdata.quay.io,resources=nifis,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=bigdata.quay.io,resources=nifis/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=bigdata.quay.io,resources=nifis/finalizers,verbs=update
-//+kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
-//+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;delete
-//+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=bigdata.quay.io,resources=nifis,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=bigdata.quay.io,resources=nifis/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=bigdata.quay.io,resources=nifis/finalizers,verbs=update
+// +kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
+// +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;delete
+// +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	rlog := ctrllog.FromContext(ctx, "namespace", req.Namespace, "name", req.Name)
 	rlog.Info("Reconciling Nifi instance: ")

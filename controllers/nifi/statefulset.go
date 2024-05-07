@@ -17,7 +17,6 @@ package nifi
 
 import (
 	"context"
-	"errors"
 	"reflect"
 
 	bigdatav1alpha1 "github.com/RHEcosystemAppEng/nifi-operator/api/v1alpha1"
@@ -25,23 +24,19 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 const (
-	readinessProbeDelay      = 60
-	readinessProbePeriod     = 20
-	livenessProbeDelay       = 30
+	readinessProbeDelay         = 60
+	readinessProbePeriod        = 20
+	livenessProbeDelay          = 30
 	probeCommand         string = "/opt/nifi/nifi-current/run/nifi.pid"
 )
 
 // reconcileStatefulSet reconciles the StatefulSet to deploy Nifi instances.
 func (r *Reconciler) reconcileStatefulSet(ctx context.Context, req ctrl.Request, nifi *bigdatav1alpha1.Nifi) error {
-	var (
-		nifiConsolePort       int
-		readinessProbeHandler corev1.ProbeHandler
-	)
+	var readinessProbeHandler corev1.ProbeHandler
 
 	ls := nifiutils.LabelsForNifi(nifi.Name)
 	ssUser := nifiUser
@@ -56,30 +51,10 @@ func (r *Reconciler) reconcileStatefulSet(ctx context.Context, req ctrl.Request,
 		},
 	}
 
-	if nifiutils.IsConsoleProtocolHTTP(nifi) {
-		nifiConsolePort = nifiHTTPConsolePort
-		readinessProbeHandler = corev1.ProbeHandler{
-			HTTPGet: &corev1.HTTPGetAction{
-				Path: "nifi-api/system-diagnostics",
-				// Use a numeric value because the request send pod IP.
-				Port: intstr.FromInt(nifiConsolePort),
-			},
-		}
-	} else if nifiutils.IsConsoleProtocolHTTPS(nifi) {
-		nifiConsolePort = nifiHTTPSConsolePort
-		readinessProbeHandler = corev1.ProbeHandler{
-			HTTPGet: &corev1.HTTPGetAction{
-				Path: "nifi-api/system-diagnostics",
-				// Use a numeric value because the request send pod IP.
-				Port:   intstr.FromInt(nifiConsolePort),
-				Scheme: "HTTPS",
-			},
-		}
-	} else {
-		err := errors.New("Console Protocol Invalid")
-		log.Error(err, "")
-
-		return err
+	readinessProbeHandler = corev1.ProbeHandler{
+		Exec: &corev1.ExecAction{
+			Command: []string{"[", "-f", "/opt/nifi/nifi-current/run/nifi.pid", "]"},
+		},
 	}
 
 	ss := &appsv1.StatefulSet{
@@ -97,12 +72,10 @@ func (r *Reconciler) reconcileStatefulSet(ctx context.Context, req ctrl.Request,
 					Labels: ls,
 				},
 				Spec: corev1.PodSpec{
+					ServiceAccountName: "nifi",
 					SecurityContext: &corev1.PodSecurityContext{
 						RunAsNonRoot: &[]bool{true}[0],
 						RunAsUser:    &ssUser,
-						SeccompProfile: &corev1.SeccompProfile{
-							Type: corev1.SeccompProfileTypeRuntimeDefault,
-						},
 					},
 					Containers: []corev1.Container{{
 						Image:   nifiImageRepo + nifiVersion,

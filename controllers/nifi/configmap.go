@@ -60,10 +60,6 @@ func newConfigMapWithName(name string, nifi *bigdatav1alpha1.Nifi) *corev1.Confi
 func getHTTPModeConfig() []corev1.EnvVar {
 	envVars := []corev1.EnvVar{}
 	envVars = append(envVars, corev1.EnvVar{
-		Name:  "NIFI_WEB_HTTPS_PORT",
-		Value: "",
-	})
-	envVars = append(envVars, corev1.EnvVar{
 		Name:  "NIFI_WEB_HTTP_PORT",
 		Value: "8080",
 	})
@@ -78,10 +74,6 @@ func getHTTPModeConfig() []corev1.EnvVar {
 func getHTTPSModeConfig() []corev1.EnvVar {
 	envVars := []corev1.EnvVar{}
 
-	envVars = append(envVars, corev1.EnvVar{
-		Name:  "NIFI_WEB_HTTPS_PORT",
-		Value: "8443",
-	})
 	envVars = append(envVars, corev1.EnvVar{
 		Name:  "NIFI_WEB_HTTP_PORT",
 		Value: "",
@@ -116,11 +108,7 @@ func getRouteHostnameConfig(nifi *bigdatav1alpha1.Nifi) []corev1.EnvVar {
 func getConsoleSpec(nifi *bigdatav1alpha1.Nifi) []corev1.EnvVar {
 	envVars := []corev1.EnvVar{}
 	if nifi.Spec.Console.Expose {
-		if nifiutils.IsConsoleProtocolHTTP(nifi) {
-			envVars = append(envVars, getHTTPModeConfig()...)
-		} else if nifiutils.IsConsoleProtocolHTTPS(nifi) {
-			envVars = append(envVars, getHTTPSModeConfig()...)
-		}
+		envVars = append(envVars, getHTTPModeConfig()...)
 		envVars = append(envVars, getRouteHostnameConfig(nifi)...)
 		return envVars
 	}

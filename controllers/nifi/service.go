@@ -17,7 +17,6 @@ package nifi
 
 import (
 	"context"
-	"errors"
 
 	bigdatav1alpha1 "github.com/RHEcosystemAppEng/nifi-operator/api/v1alpha1"
 	nifiutils "github.com/RHEcosystemAppEng/nifi-operator/controllers/nifiutils"
@@ -52,17 +51,6 @@ func newUIService(nifi *bigdatav1alpha1.Nifi) *corev1.Service {
 // reconcileNifiUIService reconciles the ClusterIP Service for Nifi User Interface
 func (r *Reconciler) reconcileNifiUIService(ctx context.Context, nifi *bigdatav1alpha1.Nifi) error {
 	svc := newUIService(nifi)
-	var nifiConsolePort int32
-
-	if nifiutils.IsConsoleProtocolHTTP(nifi) {
-		nifiConsolePort = nifiHTTPConsolePort
-	} else if nifiutils.IsConsoleProtocolHTTPS(nifi) {
-		nifiConsolePort = nifiHTTPSConsolePort
-	} else {
-		err := errors.New("Console Protocol Invalid")
-		log.Error(err, "")
-		return err
-	}
 
 	svc.Spec = corev1.ServiceSpec{
 		Selector: nifiutils.LabelsForNifi(nifi.Name),

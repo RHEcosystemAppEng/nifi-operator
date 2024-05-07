@@ -17,7 +17,6 @@ package nifi
 
 import (
 	"context"
-	"errors"
 
 	bigdatav1alpha1 "github.com/RHEcosystemAppEng/nifi-operator/api/v1alpha1"
 	nifiutils "github.com/RHEcosystemAppEng/nifi-operator/controllers/nifiutils"
@@ -59,39 +58,23 @@ func (r *Reconciler) reconcileNifiUIRoute(ctx context.Context, nifi *bigdatav1al
 	rt := newUIRoute(nifi)
 	weight := nifiUIdefaultRouteHostnameWeight
 	routeHostname := ""
-	var termination routev1.TLSTerminationType
-	var insecureEdgeTerminationPolicy routev1.InsecureEdgeTerminationPolicyType
 
 	// Check if a specific route hostname was defined in Nifi console instance config
 	if len(nifi.Spec.Console.RouteHostname) > 0 {
 		routeHostname = nifi.Spec.Console.RouteHostname
 	}
 
-	// Check if Nifi console was deployed in HTTP or HTTPS
-	if nifiutils.IsConsoleProtocolHTTP(nifi) {
-		termination = "edge"
-		insecureEdgeTerminationPolicy = "None"
-	} else if nifiutils.IsConsoleProtocolHTTPS(nifi) {
-		termination = "passthrough"
-		insecureEdgeTerminationPolicy = "Redirect"
-	} else {
-		err := errors.New("Console Protocol Invalid")
-		log.Error(err, "")
-		return err
-	}
-
 	// Configuring new Route Spec
 	rt.Spec = routev1.RouteSpec{
 		Host: routeHostname,
-		Path: "", // No needed specific path required yet
 		To: routev1.RouteTargetReference{
 			Kind:   "Service",
 			Name:   newUIService(nifi).Name,
 			Weight: &weight,
 		},
 		TLS: &routev1.TLSConfig{
-			Termination:                   termination,
-			InsecureEdgeTerminationPolicy: insecureEdgeTerminationPolicy,
+			Termination:                   "edge",
+			InsecureEdgeTerminationPolicy: "Redirect",
 		},
 	}
 
