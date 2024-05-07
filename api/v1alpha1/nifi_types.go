@@ -60,8 +60,8 @@ type NifiStatus struct {
 }
 
 // Nifi is the Schema for the nifis API
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 type Nifi struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

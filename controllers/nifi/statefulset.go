@@ -30,9 +30,9 @@ import (
 )
 
 const (
-	readinessProbeDelay      = 60
-	readinessProbePeriod     = 20
-	livenessProbeDelay       = 30
+	readinessProbeDelay         = 60
+	readinessProbePeriod        = 20
+	livenessProbeDelay          = 30
 	probeCommand         string = "/opt/nifi/nifi-current/run/nifi.pid"
 )
 
