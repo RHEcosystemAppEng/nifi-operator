@@ -17,10 +17,13 @@ package nifi
 
 import (
 	"context"
+	"reflect"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -28,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	bigdatav1alpha1 "github.com/RHEcosystemAppEng/nifi-operator/api/v1alpha1"
+	nifiutils "github.com/RHEcosystemAppEng/nifi-operator/controllers/nifiutils"
 	routev1 "github.com/openshift/api/route/v1"
 )
 
@@ -77,6 +81,9 @@ func (r *Reconciler) reconcileResources(ctx context.Context, req ctrl.Request, n
 	}
 
 	log.Info("Reconciling ConfigMaps")
+	if err := r.reconcileNifiAdminCreds(ctx, req, nifi); err != nil {
+		return err
+	}
 	if err := r.reconcileConfigMaps(ctx, req, nifi); err != nil {
 		return err
 	}
@@ -141,6 +148,63 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&appsv1.StatefulSet{}).
 		Owns(&v1.Service{}).
 		Owns(&v1.ConfigMap{}).
+		Owns(&v1.Secret{}).
 		Owns(&routev1.Route{})
 	return controller.Complete(r)
+}
+
+// newConfigMap returns a brand new corev1.ConfigMap
+func newSecret(nifi *bigdatav1alpha1.Nifi) *corev1.Secret {
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      nifi.Name,
+			Namespace: nifi.Namespace,
+			Labels:    nifiutils.LabelsForNifi(nifi.Name),
+		},
+	}
+}
+
+// newConfigMapWithName returns a corev1.ConfigMap object with a specific name
+func newSecretWithName(name string, nifi *bigdatav1alpha1.Nifi) *corev1.Secret {
+	sc := newSecret(nifi)
+	sc.ObjectMeta.Name = name
+	return sc
+}
+
+func newSecretNifiAdminCreds(nifi *bigdatav1alpha1.Nifi) *corev1.Secret {
+	sc := newSecretWithName(getNifiAdminCredsSecretName(nifi), nifi)
+	data := make(map[string][]byte)
+
+	data["SINGLE_USER_CREDENTIALS_USERNAME"] = []byte(nifiDefaultUser)
+	data["SINGLE_USER_CREDENTIALS_PASSWORD"] = []byte(nifiDefaultPassword)
+
+	sc.Data = data
+
+	return sc
+}
+
+func (r *Reconciler) reconcileNifiAdminCreds(ctx context.Context, req ctrl.Request, nifi *bigdatav1alpha1.Nifi) error {
+	sc := newSecretNifiAdminCreds(nifi)
+
+	existingSC := newSecretWithName(getNifiAdminCredsSecretName(nifi), nifi)
+	if nifiutils.IsObjectFound(r.Client, nifi.Namespace, sc.Name, existingSC) {
+		changed := false
+
+		if !reflect.DeepEqual(sc.Data, existingSC.Data) {
+			existingSC.Data = sc.Data
+			changed = true
+		}
+
+		if changed {
+			return r.Client.Update(ctx, existingSC)
+		}
+
+		return nil
+	}
+
+	if err := ctrl.SetControllerReference(nifi, sc, r.Scheme); err != nil {
+		return err
+	}
+
+	return r.Client.Create(ctx, sc)
 }

@@ -30,6 +30,8 @@ import (
 const (
 	// nifiPropertiesConfigMapName
 	nifiPropertiesConfigMapNameSuffix = "-nifi-properties"
+	// nifiAdminCredsSecretNameSuffix
+	nifiAdminCredsSecretNameSuffix = "-admin-credentials"
 )
 
 // newConfigMap returns a brand new corev1.ConfigMap
@@ -146,6 +148,11 @@ func getCredentials(nifi *bigdatav1alpha1.Nifi) []corev1.EnvVar {
 // getNifiPropertiesConfigMapName
 func getNifiPropertiesConfigMapName(nifi *bigdatav1alpha1.Nifi) string {
 	return nifi.Name + nifiPropertiesConfigMapNameSuffix
+}
+
+// getNifiAdminCredsSecretName returns the secret name for the administrator credentials by Nifi instance
+func getNifiAdminCredsSecretName(nifi *bigdatav1alpha1.Nifi) string {
+	return nifi.Name + nifiAdminCredsSecretNameSuffix
 }
 
 // isEmbeddedZookeeperEnabled checks if the embedded Zookeeper should be created or not

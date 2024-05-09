@@ -48,6 +48,13 @@ func (r *Reconciler) reconcileStatefulSet(ctx context.Context, req ctrl.Request,
 	npam := nifiPropertiesAccessMode
 	envFromSources := []corev1.EnvFromSource{
 		{
+			SecretRef: &corev1.SecretEnvSource{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: nifi.Name + nifiAdminCredsSecretNameSuffix,
+				},
+			},
+		},
+		{
 			ConfigMapRef: &corev1.ConfigMapEnvSource{
 				LocalObjectReference: corev1.LocalObjectReference{
 					Name: getNifiPropertiesConfigMapName(nifi),
@@ -100,10 +107,8 @@ func (r *Reconciler) reconcileStatefulSet(ctx context.Context, req ctrl.Request,
 					SecurityContext: &corev1.PodSecurityContext{
 						RunAsNonRoot: &[]bool{true}[0],
 						RunAsUser:    &ssUser,
-						SeccompProfile: &corev1.SeccompProfile{
-							Type: corev1.SeccompProfileTypeRuntimeDefault,
-						},
 					},
+					ServiceAccountName: "nifi",
 					Containers: []corev1.Container{{
 						Image:   nifiImageRepo + nifiVersion,
 						Name:    "nifi",
