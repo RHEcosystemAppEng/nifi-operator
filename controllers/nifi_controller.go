@@ -467,6 +467,12 @@ bash -x ../scripts/start.sh
 						ContainerPort: nifiHTTPConsolePort, // should come from flag
 					},
 				},
+				Env: []corev1.EnvVar{
+					{
+						Name:  "NIFI_WEB_HTTP_PORT",
+						Value: "8080",
+					},
+				},
 				EnvFrom: envFromSources,
 				VolumeMounts: []corev1.VolumeMount{
 					{
