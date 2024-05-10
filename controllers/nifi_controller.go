@@ -96,7 +96,11 @@ func (r *NifiReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.Service{}).
 		Owns(&corev1.ConfigMap{}).
 		Owns(&corev1.Secret{}).
+		Owns(&corev1.ServiceAccount{}).
 		Owns(&routev1.Route{}).
+		Owns(&rbacv1.Role{}).
+		Owns(&rbacv1.RoleBinding{}).
+		Owns(&rbacv1.ClusterRoleBinding{}).
 		Complete(r)
 }
 
@@ -116,10 +120,14 @@ type NifiReconciler struct {
 // +kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=serviceaccounts,verbs=get;list;watch
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;delete
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=rbac,resources=role,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=rbac,resources=rolebinding,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=rbac,resources=clusterrolebinding,verbs=get;list;watch;create;update;patch;delete
 func (r *NifiReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	rlog := logf.FromContext(ctx, "namespace", req.Namespace, "name", req.Name)
 	rlog.Info("Reconciling Nifi instance: ")
@@ -244,7 +252,6 @@ func (r *NifiReconciler) reconcileNifi(nifiNamespacedName types.NamespacedName, 
 		}
 
 		existingStatefulSet := &appsv1.StatefulSet{}
-
 		if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: statefulSet.Name, Namespace: statefulSet.Namespace}, existingStatefulSet); err != nil {
 			if errors.IsNotFound(err) {
 				rlog.Info("Creating a new Deployment", "Namespace", statefulSet.Namespace, "Name", statefulSet.Name)
@@ -266,6 +273,12 @@ func (r *NifiReconciler) reconcileNifi(nifiNamespacedName types.NamespacedName, 
 				changed = true
 			}
 
+			// Reconcile size
+			if !reflect.DeepEqual(existingStatefulSet.Spec.Template, statefulSet.Spec.Template) {
+				existingStatefulSet.Spec.Template = statefulSet.Spec.Template
+				changed = true
+			}
+
 			if changed {
 				rlog.Info("Reconciling existing Nifi StatefulSet", "Namespace", statefulSet.Namespace, "Name", statefulSet.Name)
 				err = r.Client.Update(context.TODO(), existingStatefulSet)
@@ -274,6 +287,44 @@ func (r *NifiReconciler) reconcileNifi(nifiNamespacedName types.NamespacedName, 
 				}
 			}
 		}
+	}
+
+	// Create SCC binding for allowing Nifi run as UserID 1000
+	{
+		crb := newCRBForSCC(nifiNamespacedName)
+		existingCRB := &rbacv1.ClusterRoleBinding{}
+
+		// Get CRB
+		if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: crb.Name}, existingCRB); err != nil {
+			if errors.IsNotFound(err) {
+				rlog.Info("Creating a new CRB for the SCC", "Name", crb.Name)
+				err = r.Client.Create(context.TODO(), crb)
+				if err != nil {
+					return reconcile.Result{}, err
+				}
+			}
+		} else {
+			changed := false
+
+			if !reflect.DeepEqual(existingCRB.RoleRef, crb.RoleRef) {
+				existingCRB.RoleRef = crb.RoleRef
+				changed = true
+			}
+
+			if !reflect.DeepEqual(existingCRB.Subjects, crb.Subjects) {
+				existingCRB.Subjects = crb.Subjects
+				changed = true
+			}
+
+			if changed {
+				rlog.Info("Reconciling existing CRB", "Name", crb.Name)
+				err = r.Client.Update(context.TODO(), existingCRB)
+				if err != nil {
+					return reconcile.Result{}, err
+				}
+			}
+		}
+
 	}
 
 	// Create Service
@@ -308,8 +359,8 @@ func (r *NifiReconciler) reconcileNifi(nifiNamespacedName types.NamespacedName, 
 		}
 
 		// Check if this Service already exists
-		existingService := &corev1.Service{}
-		if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: route.Name, Namespace: route.Namespace}, existingService); err != nil {
+		existingRoute := &v1.Route{}
+		if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: route.Name, Namespace: route.Namespace}, existingRoute); err != nil {
 			if errors.IsNotFound(err) {
 				rlog.Info("Creating a new Route", "Namespace", route.Namespace, "Name", route.Name)
 				err = r.Client.Create(context.TODO(), route)
@@ -343,7 +394,9 @@ func (r *NifiReconciler) reconcileNifi(nifiNamespacedName types.NamespacedName, 
 			changed := false
 			if !reflect.DeepEqual(configMap.Data, existingConfigMap.Data) {
 				existingConfigMap.Data = configMap.Data
+				changed = true
 			}
+
 			if changed {
 				rlog.Info("Reconciling existing ConfigMap", "Namespace", configMap.Namespace, "Name", configMap.Name)
 				err = r.Client.Update(context.TODO(), existingConfigMap)
@@ -376,11 +429,13 @@ func newNifiStatefulSet(ns types.NamespacedName) *appsv1.StatefulSet {
 		{
 			ConfigMapRef: &corev1.ConfigMapEnvSource{
 				LocalObjectReference: corev1.LocalObjectReference{
-					Name: nifiPrefix + "configuration",
+					Name: nifiPrefix + ns.Name + "-properties",
 				},
 			},
 		},
 	}
+
+	userID := nifiUser
 
 	podSpec := corev1.PodSpec{
 		Containers: []corev1.Container{
@@ -390,12 +445,13 @@ func newNifiStatefulSet(ns types.NamespacedName) *appsv1.StatefulSet {
 				Command: []string{"/bin/sh", "-c"},
 				Args: []string{
 					`
-							env
-							bash -x ../scripts/start.sh ;
-							`,
+env
+bash -x ../scripts/start.sh
+					`,
 				},
 				SecurityContext: &corev1.SecurityContext{
 					RunAsNonRoot:             &[]bool{true}[0],
+					RunAsUser:                &userID,
 					AllowPrivilegeEscalation: &[]bool{false}[0],
 					Capabilities: &corev1.Capabilities{
 						Drop: []corev1.Capability{
@@ -415,18 +471,18 @@ func newNifiStatefulSet(ns types.NamespacedName) *appsv1.StatefulSet {
 				VolumeMounts: []corev1.VolumeMount{
 					{
 						Name:      "nifi-properties",
-						MountPath: "/opt/nifi/nifi-current/conf/cm/nifi.properties",
-						SubPath:   "nifi.properties",
+						MountPath: "/opt/nifi/nifi-current/conf/cm/nifi.properties-2",
+						SubPath:   "nifi.properties-2",
 					},
 				},
 				Resources: corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
-						corev1.ResourceMemory: resourcev1.MustParse("128Mi"),
+						corev1.ResourceMemory: resourcev1.MustParse("768Mi"),
 						corev1.ResourceCPU:    resourcev1.MustParse("250m"),
 					},
 					Limits: corev1.ResourceList{
-						corev1.ResourceMemory: resourcev1.MustParse("256Mi"),
-						corev1.ResourceCPU:    resourcev1.MustParse("500m"),
+						corev1.ResourceMemory: resourcev1.MustParse("1Gi"),
+						corev1.ResourceCPU:    resourcev1.MustParse("1"),
 					},
 				},
 				LivenessProbe: &corev1.Probe{
@@ -456,7 +512,7 @@ func newNifiStatefulSet(ns types.NamespacedName) *appsv1.StatefulSet {
 				VolumeSource: corev1.VolumeSource{
 					ConfigMap: &corev1.ConfigMapVolumeSource{
 						LocalObjectReference: corev1.LocalObjectReference{
-							Name: "nifi-properties",
+							Name: nifiPrefix + ns.Name + "-properties",
 						},
 						DefaultMode: &nifiPropertiesAccessMode,
 					},
@@ -575,7 +631,6 @@ func newRoleBinding(meta types.NamespacedName) *rbacv1.RoleBinding {
 }
 
 func newNifiService(ns types.NamespacedName) *corev1.Service {
-
 	spec := corev1.ServiceSpec{
 		Ports: []corev1.ServicePort{
 			{
@@ -588,6 +643,7 @@ func newNifiService(ns types.NamespacedName) *corev1.Service {
 			"app.kubernetes.io/name": ns.Name,
 		},
 	}
+
 	svc := &corev1.Service{
 		ObjectMeta: objectMeta(ns.Name, ns.Namespace, func(o *metav1.ObjectMeta) {
 		}),
@@ -598,7 +654,7 @@ func newNifiService(ns types.NamespacedName) *corev1.Service {
 
 func newNifiConfigMap(ns types.NamespacedName) *corev1.ConfigMap {
 	cm := &corev1.ConfigMap{
-		ObjectMeta: objectMeta(ns.Name, ns.Namespace, func(o *metav1.ObjectMeta) {
+		ObjectMeta: objectMeta(nifiPrefix+ns.Name+"-properties", ns.Namespace, func(o *metav1.ObjectMeta) {
 		}),
 		Data: make(map[string]string),
 	}
@@ -631,5 +687,46 @@ func newNifiRoute(ns types.NamespacedName) *v1.Route {
 		},
 		Spec: routeSpec,
 	}
-
 }
+
+func newCRBForSCC(ns types.NamespacedName) *rbacv1.ClusterRoleBinding {
+	roleRef := rbacv1.RoleRef{
+		APIGroup: "rbac.authorization.k8s.io",
+		Kind:     "ClusterRole",
+		Name:     "system:openshift:scc:anyuid",
+	}
+	subjects := []rbacv1.Subject{
+		{
+			Kind:      "ServiceAccount",
+			Name:      nifiPrefix + ns.Name,
+			Namespace: ns.Namespace,
+		},
+	}
+
+	return &rbacv1.ClusterRoleBinding{
+		ObjectMeta: objectMeta(nifiPrefix+ns.Name+"-scc-binding", ns.Namespace, func(o *metav1.ObjectMeta) {
+		}),
+		Subjects: subjects,
+		RoleRef:  roleRef,
+	}
+}
+
+// apiVersion: rbac.authorization.k8s.io/v1
+// kind: ClusterRoleBinding
+// metadata:
+//   creationTimestamp: "2024-04-26T10:04:30Z"
+//   name: system:openshift:scc:anyuid
+//   resourceVersion: "52562162"
+//   uid: 9295ef3c-58cc-45c3-9459-4943fa4d8da3
+// roleRef:
+//   apiGroup: rbac.authorization.k8s.io
+//   kind: ClusterRole
+//   name: system:openshift:scc:anyuid
+// subjects:
+// - kind: ServiceAccount
+//   name: nifi
+//   namespace: nifi-operator
+// - kind: ServiceAccount
+//   name: default
+//   namespace: nifi-operator
+//
