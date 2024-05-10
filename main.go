@@ -32,7 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	bigdatav1alpha1 "github.com/RHEcosystemAppEng/nifi-operator/api/v1alpha1"
-	nifi "github.com/RHEcosystemAppEng/nifi-operator/controllers/nifi"
+	nifi "github.com/RHEcosystemAppEng/nifi-operator/controllers"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -89,7 +89,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&nifi.Reconciler{
+	if err = (&nifi.NifiReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
