@@ -17,6 +17,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -27,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/api/resource"
 	resourcev1 "k8s.io/apimachinery/pkg/api/resource"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -39,9 +41,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	bigdatav1alpha1 "github.com/RHEcosystemAppEng/nifi-operator/api/v1alpha1"
-	"github.com/RHEcosystemAppEng/nifi-operator/controllers/nifiutils"
 	routev1 "github.com/openshift/api/route/v1"
-	v1 "github.com/openshift/api/route/v1"
 )
 
 var (
@@ -359,7 +359,7 @@ func (r *NifiReconciler) reconcileNifi(nifiNamespacedName types.NamespacedName, 
 		}
 
 		// Check if this Service already exists
-		existingRoute := &v1.Route{}
+		existingRoute := &routev1.Route{}
 		if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: route.Name, Namespace: route.Namespace}, existingRoute); err != nil {
 			if errors.IsNotFound(err) {
 				rlog.Info("Creating a new Route", "Namespace", route.Namespace, "Name", route.Name)
@@ -424,6 +424,7 @@ func newServiceAccount(meta types.NamespacedName) *corev1.ServiceAccount {
 func newNifiStatefulSet(ns types.NamespacedName) *appsv1.StatefulSet {
 	image := nifiImageRepo + nifiVersion
 	nifiPropertiesAccessMode := int32(420)
+	var replicas int32 = 1
 
 	envFromSources := []corev1.EnvFromSource{
 		{
@@ -480,6 +481,11 @@ bash -x ../scripts/start.sh
 						MountPath: "/opt/nifi/nifi-current/conf/cm/nifi.properties-2",
 						SubPath:   "nifi.properties-2",
 					},
+					{
+						Name:      "content-repository",
+						MountPath: "/opt/nifi/nifi-current/content-repository",
+						SubPath:   "content-repository",
+					},
 				},
 				Resources: corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
@@ -524,6 +530,15 @@ bash -x ../scripts/start.sh
 					},
 				},
 			},
+			{
+				Name: "content-repository",
+				VolumeSource: corev1.VolumeSource{
+					PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+						ClaimName: ns.Name + "-content-repository-" + ns.Name + "-" + fmt.Sprint(replicas-1),
+						ReadOnly:  false,
+					},
+				},
+			},
 		},
 
 		ServiceAccountName: nifiPrefix + ns.Name,
@@ -538,7 +553,34 @@ bash -x ../scripts/start.sh
 		Spec: podSpec,
 	}
 
-	var replicas int32 = 1
+	var volumeMode corev1.PersistentVolumeMode
+	volumeMode = "Filesystem"
+	vcTemplates := []corev1.PersistentVolumeClaim{
+		// content_repository
+		{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "PersistentVolumeClaim",
+				APIVersion: "v1",
+			},
+			ObjectMeta: objectMeta(ns.Name+"-content-repository", ns.Namespace),
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{
+					corev1.ReadWriteOnce,
+				},
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: map[corev1.ResourceName]resource.Quantity{
+						corev1.ResourceStorage: resource.MustParse("1Gi"),
+					},
+				},
+				// StorageClassName: Usign Default
+				VolumeMode: &volumeMode,
+			},
+		},
+		// database_repository
+		// flowfile_repository
+		// provenance_repository
+	}
+
 	statefulSetSpec := appsv1.StatefulSetSpec{
 		Replicas: &replicas,
 		Selector: &metav1.LabelSelector{
@@ -546,7 +588,8 @@ bash -x ../scripts/start.sh
 				"app.kubernetes.io/name": ns.Name,
 			},
 		},
-		Template: template,
+		Template:             template,
+		VolumeClaimTemplates: vcTemplates,
 	}
 
 	statefulSet := &appsv1.StatefulSet{
@@ -667,7 +710,7 @@ func newNifiConfigMap(ns types.NamespacedName) *corev1.ConfigMap {
 	return cm
 }
 
-func newNifiRoute(ns types.NamespacedName) *v1.Route {
+func newNifiRoute(ns types.NamespacedName) *routev1.Route {
 	weight := int32(100)
 	var termination routev1.TLSTerminationType
 	var insecureEdgeTerminationPolicy routev1.InsecureEdgeTerminationPolicyType
@@ -689,7 +732,6 @@ func newNifiRoute(ns types.NamespacedName) *v1.Route {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ns.Name,
 			Namespace: ns.Namespace,
-			Labels:    nifiutils.LabelsForNifi(ns.Name),
 		},
 		Spec: routeSpec,
 	}
@@ -716,23 +758,3 @@ func newCRBForSCC(ns types.NamespacedName) *rbacv1.ClusterRoleBinding {
 		RoleRef:  roleRef,
 	}
 }
-
-// apiVersion: rbac.authorization.k8s.io/v1
-// kind: ClusterRoleBinding
-// metadata:
-//   creationTimestamp: "2024-04-26T10:04:30Z"
-//   name: system:openshift:scc:anyuid
-//   resourceVersion: "52562162"
-//   uid: 9295ef3c-58cc-45c3-9459-4943fa4d8da3
-// roleRef:
-//   apiGroup: rbac.authorization.k8s.io
-//   kind: ClusterRole
-//   name: system:openshift:scc:anyuid
-// subjects:
-// - kind: ServiceAccount
-//   name: nifi
-//   namespace: nifi-operator
-// - kind: ServiceAccount
-//   name: default
-//   namespace: nifi-operator
-//
