@@ -1,0 +1,11 @@
+---
+apiVersion: bigdata.quay.io/v1alpha1
+kind: Nifi
+metadata:
+  name: test
+spec:
+  size: 1
+  useDefaultCredentials: true
+  console:
+    expose: true
+    protocol: "http"
