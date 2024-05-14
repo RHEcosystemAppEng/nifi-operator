@@ -437,8 +437,15 @@ func newNifiStatefulSet(ns types.NamespacedName) *appsv1.StatefulSet {
 	}
 
 	userID := nifiUser
+	fsGroupChangePolicy := corev1.FSGroupChangeOnRootMismatch
 
 	podSpec := corev1.PodSpec{
+		SecurityContext: &corev1.PodSecurityContext{
+			RunAsUser:           &userID,
+			RunAsGroup:          &userID,
+			FSGroup:             &userID,
+			FSGroupChangePolicy: &fsGroupChangePolicy,
+		},
 		Containers: []corev1.Container{
 			{
 				Name:    ns.Name,
@@ -470,6 +477,10 @@ bash -x ../scripts/start.sh
 				},
 				Env: []corev1.EnvVar{
 					{
+						Name:  "NIFI_SENSITIVE_PROPS_KEY",
+						Value: "Th1s1sAS3crEt",
+					},
+					{
 						Name:  "NIFI_WEB_HTTP_PORT",
 						Value: "8080",
 					},
@@ -477,14 +488,34 @@ bash -x ../scripts/start.sh
 				EnvFrom: envFromSources,
 				VolumeMounts: []corev1.VolumeMount{
 					{
+						Name:      "flow",
+						MountPath: "/opt/nifi/nifi-current/conf/flow",
+						SubPath:   "flow",
+					},
+					{
 						Name:      "nifi-properties",
-						MountPath: "/opt/nifi/nifi-current/conf/cm/nifi.properties-2",
-						SubPath:   "nifi.properties-2",
+						MountPath: "/opt/nifi/nifi-current/conf/nifi.properties",
+						SubPath:   "nifi.properties",
 					},
 					{
 						Name:      "content-repository",
-						MountPath: "/opt/nifi/nifi-current/content-repository",
+						MountPath: "/opt/nifi/nifi-current/content_repository",
 						SubPath:   "content-repository",
+					},
+					{
+						Name:      "database-repository",
+						MountPath: "/opt/nifi/nifi-current/database_repository",
+						SubPath:   "database-repository",
+					},
+					{
+						Name:      "flowfile-repository",
+						MountPath: "/opt/nifi/nifi-current/flowfile_repository",
+						SubPath:   "flowfile-repository",
+					},
+					{
+						Name:      "provenance-repository",
+						MountPath: "/opt/nifi/nifi-current/provenance_repository",
+						SubPath:   "provenance-repository",
 					},
 				},
 				Resources: corev1.ResourceRequirements{
@@ -531,10 +562,46 @@ bash -x ../scripts/start.sh
 				},
 			},
 			{
+				Name: "flow",
+				VolumeSource: corev1.VolumeSource{
+					PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+						ClaimName: ns.Name + "-flow-" + ns.Name + "-" + fmt.Sprint(replicas-1),
+						ReadOnly:  false,
+					},
+				},
+			},
+			{
 				Name: "content-repository",
 				VolumeSource: corev1.VolumeSource{
 					PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
 						ClaimName: ns.Name + "-content-repository-" + ns.Name + "-" + fmt.Sprint(replicas-1),
+						ReadOnly:  false,
+					},
+				},
+			},
+			{
+				Name: "database-repository",
+				VolumeSource: corev1.VolumeSource{
+					PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+						ClaimName: ns.Name + "-database-repository-" + ns.Name + "-" + fmt.Sprint(replicas-1),
+						ReadOnly:  false,
+					},
+				},
+			},
+			{
+				Name: "flowfile-repository",
+				VolumeSource: corev1.VolumeSource{
+					PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+						ClaimName: ns.Name + "-flowfile-repository-" + ns.Name + "-" + fmt.Sprint(replicas-1),
+						ReadOnly:  false,
+					},
+				},
+			},
+			{
+				Name: "provenance-repository",
+				VolumeSource: corev1.VolumeSource{
+					PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+						ClaimName: ns.Name + "-provenance-repository-" + ns.Name + "-" + fmt.Sprint(replicas-1),
 						ReadOnly:  false,
 					},
 				},
@@ -556,6 +623,25 @@ bash -x ../scripts/start.sh
 	var volumeMode corev1.PersistentVolumeMode
 	volumeMode = "Filesystem"
 	vcTemplates := []corev1.PersistentVolumeClaim{
+		{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "PersistentVolumeClaim",
+				APIVersion: "v1",
+			},
+			ObjectMeta: objectMeta(ns.Name+"-flow", ns.Namespace),
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{
+					corev1.ReadWriteOnce,
+				},
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: map[corev1.ResourceName]resource.Quantity{
+						corev1.ResourceStorage: resource.MustParse("1Gi"),
+					},
+				},
+				// StorageClassName: Usign Default
+				VolumeMode: &volumeMode,
+			},
+		},
 		// content_repository
 		{
 			TypeMeta: metav1.TypeMeta{
@@ -577,8 +663,65 @@ bash -x ../scripts/start.sh
 			},
 		},
 		// database_repository
+		{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "PersistentVolumeClaim",
+				APIVersion: "v1",
+			},
+			ObjectMeta: objectMeta(ns.Name+"-database-repository", ns.Namespace),
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{
+					corev1.ReadWriteOnce,
+				},
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: map[corev1.ResourceName]resource.Quantity{
+						corev1.ResourceStorage: resource.MustParse("1Gi"),
+					},
+				},
+				// StorageClassName: Usign Default
+				VolumeMode: &volumeMode,
+			},
+		},
 		// flowfile_repository
+		{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "PersistentVolumeClaim",
+				APIVersion: "v1",
+			},
+			ObjectMeta: objectMeta(ns.Name+"-flowfile-repository", ns.Namespace),
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{
+					corev1.ReadWriteOnce,
+				},
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: map[corev1.ResourceName]resource.Quantity{
+						corev1.ResourceStorage: resource.MustParse("1Gi"),
+					},
+				},
+				// StorageClassName: Usign Default
+				VolumeMode: &volumeMode,
+			},
+		},
 		// provenance_repository
+		{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "PersistentVolumeClaim",
+				APIVersion: "v1",
+			},
+			ObjectMeta: objectMeta(ns.Name+"-provenance-repository", ns.Namespace),
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{
+					corev1.ReadWriteOnce,
+				},
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: map[corev1.ResourceName]resource.Quantity{
+						corev1.ResourceStorage: resource.MustParse("1Gi"),
+					},
+				},
+				// StorageClassName: Usign Default
+				VolumeMode: &volumeMode,
+			},
+		},
 	}
 
 	statefulSetSpec := appsv1.StatefulSetSpec{
@@ -705,7 +848,7 @@ func newNifiConfigMap(ns types.NamespacedName) *corev1.ConfigMap {
 	cm := &corev1.ConfigMap{
 		ObjectMeta: objectMeta(nifiPrefix+ns.Name+"-properties", ns.Namespace, func(o *metav1.ObjectMeta) {
 		}),
-		Data: make(map[string]string),
+		Data: map[string]string{"nifi.properties": defaultNifiProperties},
 	}
 	return cm
 }
