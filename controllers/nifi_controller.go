@@ -70,6 +70,12 @@ const (
 	nifiHTTPConsolePort = 8080
 	// nifiHTTPSConsolePort specify the port for Nifi console
 	nifiHTTPSConsolePort = 8443
+	// nifiInputSocketPort specify the port for InputSockets on Nifi
+	nifiInputSocketPort = 10443
+	// nifiClusterPort specify the port for clustering Nifi
+	nifiClusterPort = 11443
+	// nifiClusterLBPort specify the port for clustering Nifi
+	nifiClusterLBPort = 6342
 
 	// StartupProbes
 	startupProbeInitialDelay     = 1
@@ -203,7 +209,7 @@ func (r *NifiReconciler) reconcileNifi(nifiNamespacedName types.NamespacedName, 
 		}
 	}
 
-	// Define a new cluster role for backend service
+	// Define a new cluster role for Nifi
 	{
 		role := newRole(nifiNamespacedName)
 
@@ -234,7 +240,7 @@ func (r *NifiReconciler) reconcileNifi(nifiNamespacedName types.NamespacedName, 
 		}
 	}
 
-	// Define Cluster Role Binding for backend service
+	// Define Cluster Role Binding for Nifi
 	{
 		roleBinding := newRoleBinding(nifiNamespacedName)
 
@@ -360,8 +366,21 @@ func (r *NifiReconciler) reconcileNifi(nifiNamespacedName types.NamespacedName, 
 				if err != nil {
 					return reconcile.Result{}, err
 				}
-			} else {
-				return reconcile.Result{}, err
+			}
+		} else {
+			changed := false
+
+			if !reflect.DeepEqual(existingService.Spec, service.Spec) {
+				existingService.Spec = service.Spec
+				changed = true
+			}
+
+			if changed {
+				rlog.Info("Reconciling existing Service", "Name", service.Name)
+				err = r.Client.Update(context.TODO(), existingService)
+				if err != nil {
+					return reconcile.Result{}, err
+				}
 			}
 		}
 	}
@@ -389,9 +408,9 @@ func (r *NifiReconciler) reconcileNifi(nifiNamespacedName types.NamespacedName, 
 		}
 	}
 
-	// Reconcile ConfigMaps and Secrets
+	// Reconcile Nifi Properties ConfigMap
 	{
-		configMap := newNifiConfigMap(nifiNamespacedName)
+		configMap := newNifiPropertiesConfigMap(nifiNamespacedName)
 		if err := controllerutil.SetControllerReference(instance, configMap, r.Scheme); err != nil {
 			return reconcile.Result{}, err
 		}
@@ -423,6 +442,74 @@ func (r *NifiReconciler) reconcileNifi(nifiNamespacedName types.NamespacedName, 
 		}
 	}
 
+	// Reconcile Nifi Env ConfigMap
+	{
+		configMap := newNifiEnvConfigMap(nifiNamespacedName)
+		if err := controllerutil.SetControllerReference(instance, configMap, r.Scheme); err != nil {
+			return reconcile.Result{}, err
+		}
+
+		// Check if this ConfigMap already exists
+		existingConfigMap := &corev1.ConfigMap{}
+		if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: configMap.Name, Namespace: configMap.Namespace}, existingConfigMap); err != nil {
+			if errors.IsNotFound(err) {
+				rlog.Info("Creating a new ConfigMap", "Namespace", configMap.Namespace, "Name", configMap.Name)
+				err = r.Client.Create(context.TODO(), configMap)
+				if err != nil {
+					return reconcile.Result{}, err
+				}
+			}
+		} else {
+			changed := false
+			if !reflect.DeepEqual(configMap.Data, existingConfigMap.Data) {
+				existingConfigMap.Data = configMap.Data
+				changed = true
+			}
+
+			if changed {
+				rlog.Info("Reconciling existing ConfigMap", "Namespace", configMap.Namespace, "Name", configMap.Name)
+				err = r.Client.Update(context.TODO(), existingConfigMap)
+				if err != nil {
+					return reconcile.Result{}, err
+				}
+			}
+		}
+	}
+
+	// Reconcile Nifi Secret
+	{
+		secret := newNifiSecret(nifiNamespacedName)
+		if err := controllerutil.SetControllerReference(instance, secret, r.Scheme); err != nil {
+			return reconcile.Result{}, err
+		}
+
+		// Check if this secret already exists
+		existingSecret := &corev1.Secret{}
+		if err := r.Client.Get(context.TODO(), types.NamespacedName{Name: secret.Name, Namespace: secret.Namespace}, existingSecret); err != nil {
+			if errors.IsNotFound(err) {
+				rlog.Info("Creating a new Secret", "Namespace", secret.Namespace, "Name", secret.Name)
+				err = r.Client.Create(context.TODO(), secret)
+				if err != nil {
+					return reconcile.Result{}, err
+				}
+			}
+		} else {
+			changed := false
+			if !reflect.DeepEqual(secret.Data, existingSecret.Data) {
+				existingSecret.Data = secret.Data
+				changed = true
+			}
+
+			if changed {
+				rlog.Info("Reconciling existing Secret", "Namespace", secret.Namespace, "Name", secret.Name)
+				err = r.Client.Update(context.TODO(), existingSecret)
+				if err != nil {
+					return reconcile.Result{}, err
+				}
+			}
+		}
+	}
+
 	return reconcile.Result{}, nil
 }
 
@@ -446,7 +533,14 @@ func newNifiStatefulSet(ns types.NamespacedName, instance *bigdatav1alpha1.Nifi)
 		{
 			ConfigMapRef: &corev1.ConfigMapEnvSource{
 				LocalObjectReference: corev1.LocalObjectReference{
-					Name: nifiPrefix + ns.Name + "-properties",
+					Name: nifiPrefix + ns.Name + "-env",
+				},
+			},
+		},
+		{
+			SecretRef: &corev1.SecretEnvSource{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: nifiPrefix + ns.Name + "-secret",
 				},
 			},
 		},
@@ -502,19 +596,30 @@ bash -x ../scripts/start.sh
 					{
 						Name:          "http",
 						Protocol:      corev1.ProtocolTCP,
-						ContainerPort: nifiHTTPConsolePort, // should come from flag
-					},
-				},
-				Env: []corev1.EnvVar{
-					{
-						Name:  "NIFI_SENSITIVE_PROPS_KEY",
-						Value: "Th1s1sAS3crEt",
+						ContainerPort: nifiHTTPConsolePort,
 					},
 					{
-						Name:  "NIFI_WEB_HTTP_PORT",
-						Value: "8080",
+						Name:          "https",
+						Protocol:      corev1.ProtocolTCP,
+						ContainerPort: nifiHTTPSConsolePort,
+					},
+					{
+						Name:          "input-socket",
+						Protocol:      corev1.ProtocolTCP,
+						ContainerPort: nifiInputSocketPort,
+					},
+					{
+						Name:          "cluster",
+						Protocol:      corev1.ProtocolTCP,
+						ContainerPort: nifiClusterPort,
+					},
+					{
+						Name:          "cluster-lb",
+						Protocol:      corev1.ProtocolTCP,
+						ContainerPort: nifiClusterLBPort,
 					},
 				},
+				Env:     []corev1.EnvVar{},
 				EnvFrom: envFromSources,
 				VolumeMounts: []corev1.VolumeMount{
 					{
@@ -785,25 +890,6 @@ bash -x ../scripts/start.sh
 	return statefulSet
 }
 
-func newBackendService(ns types.NamespacedName) *corev1.Service {
-	spec := corev1.ServiceSpec{
-		Ports: []corev1.ServicePort{
-			{
-				Port:       nifiHTTPConsolePort,
-				Protocol:   corev1.ProtocolTCP,
-				TargetPort: intstr.FromInt(int(nifiHTTPConsolePort)),
-			},
-		},
-		Selector: map[string]string{
-			"app.kubernetes.io/name": ns.Name,
-		},
-	}
-	svc := &corev1.Service{
-		Spec: spec,
-	}
-	return svc
-}
-
 func objectMeta(resourceName string, namespace string, opts ...func(*metav1.ObjectMeta)) metav1.ObjectMeta {
 	objectMeta := metav1.ObjectMeta{
 		Name:      resourceName,
@@ -868,9 +954,34 @@ func newNifiService(ns types.NamespacedName) *corev1.Service {
 	spec := corev1.ServiceSpec{
 		Ports: []corev1.ServicePort{
 			{
+				Name:       "http",
 				Port:       nifiHTTPConsolePort,
 				Protocol:   corev1.ProtocolTCP,
 				TargetPort: intstr.FromInt(int(nifiHTTPConsolePort)),
+			},
+			{
+				Name:       "https",
+				Port:       nifiHTTPSConsolePort,
+				Protocol:   corev1.ProtocolTCP,
+				TargetPort: intstr.FromInt(int(nifiHTTPSConsolePort)),
+			},
+			{
+				Name:       "input-socket",
+				Port:       nifiInputSocketPort,
+				Protocol:   corev1.ProtocolTCP,
+				TargetPort: intstr.FromInt(int(nifiInputSocketPort)),
+			},
+			{
+				Name:       "cluster",
+				Port:       nifiClusterPort,
+				Protocol:   corev1.ProtocolTCP,
+				TargetPort: intstr.FromInt(int(nifiClusterPort)),
+			},
+			{
+				Name:       "cluster-lb",
+				Port:       nifiClusterLBPort,
+				Protocol:   corev1.ProtocolTCP,
+				TargetPort: intstr.FromInt(int(nifiClusterLBPort)),
 			},
 		},
 		Selector: map[string]string{
@@ -886,13 +997,36 @@ func newNifiService(ns types.NamespacedName) *corev1.Service {
 	return svc
 }
 
-func newNifiConfigMap(ns types.NamespacedName) *corev1.ConfigMap {
+func newNifiPropertiesConfigMap(ns types.NamespacedName) *corev1.ConfigMap {
 	cm := &corev1.ConfigMap{
 		ObjectMeta: objectMeta(nifiPrefix+ns.Name+"-properties", ns.Namespace, func(o *metav1.ObjectMeta) {
 		}),
 		Data: map[string]string{"nifi.properties": defaultNifiProperties},
 	}
 	return cm
+}
+
+func newNifiEnvConfigMap(ns types.NamespacedName) *corev1.ConfigMap {
+	cm := &corev1.ConfigMap{
+		ObjectMeta: objectMeta(nifiPrefix+ns.Name+"-env", ns.Namespace, func(o *metav1.ObjectMeta) {
+		}),
+		Data: map[string]string{
+			"NIFI_WEB_HTTP_PORT":  "8080",
+			"NIFI_WEB_HTTPS_PORT": "8443",
+		},
+	}
+	return cm
+}
+
+func newNifiSecret(ns types.NamespacedName) *corev1.Secret {
+	secret := &corev1.Secret{
+		ObjectMeta: objectMeta(nifiPrefix+ns.Name+"-secret", ns.Namespace, func(o *metav1.ObjectMeta) {
+		}),
+		Data: map[string][]byte{
+			"NIFI_SENSITIVE_PROPS_KEY": []byte("Th1s1sAS3crEt"),
+		},
+	}
+	return secret
 }
 
 func newNifiRoute(ns types.NamespacedName) *routev1.Route {
