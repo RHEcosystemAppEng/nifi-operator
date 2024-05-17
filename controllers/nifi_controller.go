@@ -525,10 +525,23 @@ func newServiceAccount(meta types.NamespacedName) *corev1.ServiceAccount {
 
 // newNifiStatefulSet returns an updated instance of the StatefulSet for deploying Nifi
 func newNifiStatefulSet(ns types.NamespacedName, instance *bigdatav1alpha1.Nifi) *appsv1.StatefulSet {
-	image := nifiImageRepo + nifiVersion
-	nifiPropertiesAccessMode := int32(420)
-	var replicas int32 = 1
+	// Image
+	var image string
+	if instance.Spec.Image != "" {
+		image = instance.Spec.Image
+	} else {
+		image = nifiImageRepo + nifiVersion
+	}
 
+	// Replicas
+	var replicas int32
+	if instance.Spec.Size != 0 {
+		replicas = instance.Spec.Size
+	} else {
+		replicas = 1
+	}
+
+	nifiPropertiesAccessMode := int32(420)
 	envFromSources := []corev1.EnvFromSource{
 		{
 			ConfigMapRef: &corev1.ConfigMapEnvSource{

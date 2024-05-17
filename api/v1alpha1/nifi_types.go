@@ -39,8 +39,13 @@ type NifiConsoleSpec struct {
 type NifiSpec struct {
 	//+kubebuilder:validation:Minimum=0
 	//+kubebuilder:validation:Required
+	//+kubebuilder:default:0
 	// Size is the size of the nifi deployment
 	Size int32 `json:"size"`
+
+	//+kubebuilder:validation:Optional
+	// Image the container image for the Nifi deployment
+	Image string `json:"image"`
 
 	//+kubebuilder:default:true
 	//+kubebuilder:validation:Required

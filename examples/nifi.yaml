@@ -5,6 +5,7 @@ metadata:
   name: test
 spec:
   size: 1
+  image: apache/nifi:1.26.0
   useDefaultCredentials: true
   console:
     expose: true

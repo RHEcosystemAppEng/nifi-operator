@@ -49,6 +49,9 @@ spec:
                 - expose
                 - protocol
                 type: object
+              image:
+                description: Image the container image for the Nifi deployment
+                type: string
               resources:
                 description: ResourceRequirements describes the compute resource requirements.
                 properties:
