@@ -9,3 +9,10 @@ spec:
   console:
     expose: true
     protocol: "http"
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "1Gi"
+    limits:
+      cpu: "4"
+      memory: "4Gi"

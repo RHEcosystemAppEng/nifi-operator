@@ -244,7 +244,7 @@ func (r *NifiReconciler) reconcileNifi(nifiNamespacedName types.NamespacedName, 
 
 	// Define a new Nifi StatefulSet
 	{
-		statefulSet := newNifiStatefulSet(nifiNamespacedName)
+		statefulSet := newNifiStatefulSet(nifiNamespacedName, instance)
 
 		// Set Nifi instance as the owner and controller
 		if err := controllerutil.SetControllerReference(instance, statefulSet, r.Scheme); err != nil {
@@ -273,7 +273,7 @@ func (r *NifiReconciler) reconcileNifi(nifiNamespacedName types.NamespacedName, 
 				changed = true
 			}
 
-			// Reconcile size
+			// Reconcile ss spec
 			if !reflect.DeepEqual(existingStatefulSet.Spec.Template, statefulSet.Spec.Template) {
 				existingStatefulSet.Spec.Template = statefulSet.Spec.Template
 				changed = true
@@ -421,7 +421,7 @@ func newServiceAccount(meta types.NamespacedName) *corev1.ServiceAccount {
 }
 
 // newNifiStatefulSet returns an updated instance of the StatefulSet for deploying Nifi
-func newNifiStatefulSet(ns types.NamespacedName) *appsv1.StatefulSet {
+func newNifiStatefulSet(ns types.NamespacedName, instance *bigdatav1alpha1.Nifi) *appsv1.StatefulSet {
 	image := nifiImageRepo + nifiVersion
 	nifiPropertiesAccessMode := int32(420)
 	var replicas int32 = 1
@@ -434,6 +434,20 @@ func newNifiStatefulSet(ns types.NamespacedName) *appsv1.StatefulSet {
 				},
 			},
 		},
+	}
+
+	resources := corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceMemory: resourcev1.MustParse("768Mi"),
+			corev1.ResourceCPU:    resourcev1.MustParse("250m"),
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceMemory: resourcev1.MustParse("1Gi"),
+			corev1.ResourceCPU:    resourcev1.MustParse("1"),
+		},
+	}
+	if instance.Spec.Resources != nil {
+		resources = *instance.Spec.Resources
 	}
 
 	userID := nifiUser
@@ -518,16 +532,7 @@ bash -x ../scripts/start.sh
 						SubPath:   "provenance-repository",
 					},
 				},
-				Resources: corev1.ResourceRequirements{
-					Requests: corev1.ResourceList{
-						corev1.ResourceMemory: resourcev1.MustParse("768Mi"),
-						corev1.ResourceCPU:    resourcev1.MustParse("250m"),
-					},
-					Limits: corev1.ResourceList{
-						corev1.ResourceMemory: resourcev1.MustParse("1Gi"),
-						corev1.ResourceCPU:    resourcev1.MustParse("1"),
-					},
-				},
+				Resources: resources,
 				LivenessProbe: &corev1.Probe{
 					InitialDelaySeconds: int32(livenessProbeDelay),
 					ProbeHandler: corev1.ProbeHandler{
