@@ -71,12 +71,28 @@ const (
 	// nifiHTTPSConsolePort specify the port for Nifi console
 	nifiHTTPSConsolePort = 8443
 
-	// Probes
-	livenessProbeDelay = 20
+	// StartupProbes
+	startupProbeInitialDelay     = 1
+	startupProbeTimeout          = 2
+	startupProbePeriod           = 3
+	startupProbeSuccessThreshold = 1
+	startupProbeFailureThreshold = 15
 
-	readinessProbeDelay         = 20
-	readinessProbePeriod        = 10
-	probeCommand         string = "/opt/nifi/nifi-current/run/nifi.pid"
+	// LivenessProbes
+	livenessProbeInitialDelay     = 20
+	livenessProbeTimeout          = 5
+	livenessProbePeriod           = 12
+	livenessProbeSuccessThreshold = 1
+	livenessProbeFailureThreshold = 3
+
+	// ReadinessProbes
+	readinessProbeInitialDelay     = 20
+	readinessProbeTimeout          = 5
+	readinessProbePeriod           = 12
+	readinessProbeSuccessThreshold = 1
+	readinessProbeFailureThreshold = 3
+
+	probeCommand string = "/opt/nifi/nifi-current/run/nifi.pid"
 )
 
 var log = logf.Log.WithName("Nifi-Controller")
@@ -534,16 +550,37 @@ bash -x ../scripts/start.sh
 				},
 				Resources: resources,
 				LivenessProbe: &corev1.Probe{
-					InitialDelaySeconds: int32(livenessProbeDelay),
+					InitialDelaySeconds: int32(livenessProbeInitialDelay),
+					TimeoutSeconds:      int32(livenessProbeTimeout),
+					PeriodSeconds:       int32(livenessProbePeriod),
+					SuccessThreshold:    int32(livenessProbeSuccessThreshold),
+					FailureThreshold:    int32(livenessProbeFailureThreshold),
 					ProbeHandler: corev1.ProbeHandler{
 						Exec: &corev1.ExecAction{
 							Command: []string{"test", probeCommand},
 						},
 					},
 				},
+				StartupProbe: &corev1.Probe{
+					InitialDelaySeconds: int32(startupProbeInitialDelay),
+					TimeoutSeconds:      int32(startupProbeTimeout),
+					PeriodSeconds:       int32(startupProbePeriod),
+					SuccessThreshold:    int32(startupProbeSuccessThreshold),
+					FailureThreshold:    int32(startupProbeFailureThreshold),
+					ProbeHandler: corev1.ProbeHandler{
+						HTTPGet: &corev1.HTTPGetAction{
+							Path: "nifi-api/system-diagnostics",
+							// Use a numeric value because the request send pod IP.
+							Port: intstr.FromInt(nifiHTTPConsolePort),
+						},
+					},
+				},
 				ReadinessProbe: &corev1.Probe{
-					InitialDelaySeconds: int32(readinessProbeDelay),
+					InitialDelaySeconds: int32(readinessProbeInitialDelay),
+					TimeoutSeconds:      int32(readinessProbeTimeout),
 					PeriodSeconds:       int32(readinessProbePeriod),
+					SuccessThreshold:    int32(readinessProbeSuccessThreshold),
+					FailureThreshold:    int32(readinessProbeFailureThreshold),
 					ProbeHandler: corev1.ProbeHandler{
 						HTTPGet: &corev1.HTTPGetAction{
 							Path: "nifi-api/system-diagnostics",
