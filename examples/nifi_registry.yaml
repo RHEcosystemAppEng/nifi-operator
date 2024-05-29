@@ -1,0 +1,9 @@
+---
+apiVersion: bigdata.quay.io/v1alpha1
+kind: NifiRegistry
+metadata:
+  name: test-registry
+  namespace: nifi-operator
+spec:
+  image: apache/nifi-registry:1.16.3
+  expose: false

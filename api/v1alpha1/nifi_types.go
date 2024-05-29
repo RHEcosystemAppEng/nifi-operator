@@ -79,8 +79,7 @@ type Nifi struct {
 	Status NifiStatus `json:"status,omitempty"`
 }
 
-//+kubebuilder:object:root=true
-
+// +kubebuilder:object:root=true
 // NifiList contains a list of Nifi
 type NifiList struct {
 	metav1.TypeMeta `json:",inline"`
@@ -88,6 +87,42 @@ type NifiList struct {
 	Items           []Nifi `json:"items"`
 }
 
+// NifiRegistrySpec defines the desired state of Nifi Registry
+type NifiRegistrySpec struct {
+	//+kubebuilder:validation:Optional
+	// Image the container image for the Nifi deployment
+	Image string `json:"image"`
+
+	//+kubebuilder:validation:Required
+	Expose bool `json:"expose"`
+}
+
+// NifiStatus defines the observed state of Nifi
+type NifiRegistryStatus struct {
+	// UI Route reference
+	UIRoute string `json:"uiRoute"`
+}
+
+// NifiRegistry is the Schema for the nifi registries API
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+type NifiRegistry struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   NifiRegistrySpec   `json:"spec,omitempty"`
+	Status NifiRegistryStatus `json:"status,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+// NifiList contains a list of Nifi
+type NifiRegistryList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []NifiRegistry `json:"items"`
+}
+
 func init() {
 	SchemeBuilder.Register(&Nifi{}, &NifiList{})
+	SchemeBuilder.Register(&NifiRegistry{}, &NifiRegistryList{})
 }
