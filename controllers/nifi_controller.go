@@ -535,11 +535,7 @@ func newNifiStatefulSet(ns types.NamespacedName, instance *bigdatav1alpha1.Nifi)
 
 	// Replicas
 	var replicas int32
-	if instance.Spec.Replicas != 0 {
-		replicas = instance.Spec.Replicas
-	} else {
-		replicas = 1
-	}
+	replicas = instance.Spec.Replicas
 
 	nifiPropertiesAccessMode := int32(420)
 	envFromSources := []corev1.EnvFromSource{
