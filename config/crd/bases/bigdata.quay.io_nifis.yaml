@@ -52,6 +52,11 @@ spec:
               image:
                 description: Image the container image for the Nifi deployment
                 type: string
+              replicas:
+                description: Replicas the ammount of pods for a nifi deployment
+                format: int32
+                minimum: 0
+                type: integer
               resources:
                 description: ResourceRequirements describes the compute resource requirements.
                 properties:
@@ -100,18 +105,13 @@ spec:
                       More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                     type: object
                 type: object
-              size:
-                description: Size is the size of the nifi deployment
-                format: int32
-                minimum: 0
-                type: integer
               useDefaultCredentials:
                 description: UseDefaultCredentials defines if Nifi should be configured
                   with the Single User default Credentials
                 type: boolean
             required:
             - console
-            - size
+            - replicas
             - useDefaultCredentials
             type: object
           status:

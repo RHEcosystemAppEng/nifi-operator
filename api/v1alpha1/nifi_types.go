@@ -40,8 +40,8 @@ type NifiSpec struct {
 	//+kubebuilder:validation:Minimum=0
 	//+kubebuilder:validation:Required
 	//+kubebuilder:default:0
-	// Size is the size of the nifi deployment
-	Size int32 `json:"size"`
+	// Replicas the ammount of pods for a nifi deployment
+	Replicas int32 `json:"replicas"`
 
 	//+kubebuilder:validation:Optional
 	// Image the container image for the Nifi deployment

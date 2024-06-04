@@ -289,9 +289,9 @@ func (r *NifiReconciler) reconcileNifi(nifiNamespacedName types.NamespacedName, 
 			// Reconcile current instance
 			changed := false
 
-			// Reconcile size
-			if existingStatefulSet.Spec.Replicas != &(instance.Spec.Size) {
-				existingStatefulSet.Spec.Replicas = &(instance.Spec.Size)
+			// Reconcile replicas
+			if existingStatefulSet.Spec.Replicas != &(instance.Spec.Replicas) {
+				existingStatefulSet.Spec.Replicas = &(instance.Spec.Replicas)
 				changed = true
 			}
 
@@ -535,8 +535,8 @@ func newNifiStatefulSet(ns types.NamespacedName, instance *bigdatav1alpha1.Nifi)
 
 	// Replicas
 	var replicas int32
-	if instance.Spec.Size != 0 {
-		replicas = instance.Spec.Size
+	if instance.Spec.Replicas != 0 {
+		replicas = instance.Spec.Replicas
 	} else {
 		replicas = 1
 	}
