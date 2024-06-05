@@ -47,10 +47,10 @@ import (
 
 const (
 	nifiPrefix = "nifi-"
-	// nifiImageRepo sets the repo URL for the Nifi image
-	nifiImageRepo = "docker.io/apache/nifi"
-	// nifiVersion sets the version for the Nifi Image
-	nifiVersion = ":1.16.3"
+	// nifiDefaultImageRepo sets the repo URL for the Nifi image
+	nifiDefaultImageRepo = "docker.io/apache/nifi"
+	// nifiDefaultVersion sets the version for the Nifi Image
+	nifiDefaultVersion = "1.16.3"
 	// nifiUser internal user ID for nifi
 	nifiUser = int64(1000)
 	// nifiPropertiesAccessMode establish the internal unix permissions for 'nifi.properties' file
@@ -510,7 +510,7 @@ func newNifiStatefulSet(ns types.NamespacedName, instance *bigdatav1alpha1.Nifi)
 	if instance.Spec.Image != "" {
 		image = instance.Spec.Image
 	} else {
-		image = nifiImageRepo + nifiVersion
+		image = nifiDefaultImageRepo + ":" + nifiDefaultVersion
 	}
 
 	// Replicas
