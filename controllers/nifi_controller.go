@@ -44,11 +44,6 @@ import (
 	routev1 "github.com/openshift/api/route/v1"
 )
 
-var (
-	serviceName = "cluster"
-	namespace   = "nifi-operator"
-)
-
 const (
 	nifiPrefix = "nifi-"
 	// nifiImageRepo sets the repo URL for the Nifi image
