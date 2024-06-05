@@ -18,14 +18,14 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"reflect"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -34,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -56,8 +57,6 @@ const (
 	nifiPropertiesAccessMode = int32(420)
 	// nifiDefaultUser sets Single User Access Username
 	nifiDefaultUser = "administrator"
-	// nifiDefaultUser sets Single User Access Password
-	nifiDefaultPassword = "administrator"
 
 	// nifiConsolePortName names the port for Nifi console
 	nifiConsolePortName = "nifi-console"
@@ -484,20 +483,6 @@ func (r *NifiReconciler) reconcileNifi(nifiNamespacedName types.NamespacedName, 
 			if errors.IsNotFound(err) {
 				rlog.Info("Creating a new Secret", "Namespace", secret.Namespace, "Name", secret.Name)
 				err = r.Client.Create(context.TODO(), secret)
-				if err != nil {
-					return reconcile.Result{}, err
-				}
-			}
-		} else {
-			changed := false
-			if !reflect.DeepEqual(secret.Data, existingSecret.Data) {
-				existingSecret.Data = secret.Data
-				changed = true
-			}
-
-			if changed {
-				rlog.Info("Reconciling existing Secret", "Namespace", secret.Namespace, "Name", secret.Name)
-				err = r.Client.Update(context.TODO(), existingSecret)
 				if err != nil {
 					return reconcile.Result{}, err
 				}
@@ -1023,11 +1008,12 @@ func newNifiEnvConfigMap(ns types.NamespacedName) *corev1.ConfigMap {
 }
 
 func newNifiSecret(ns types.NamespacedName) *corev1.Secret {
+	password := generateAdminPassword(24)
 	secret := &corev1.Secret{
 		ObjectMeta: objectMeta(nifiPrefix+ns.Name+"-secret", ns.Namespace, func(o *metav1.ObjectMeta) {
 		}),
 		Data: map[string][]byte{
-			"NIFI_SENSITIVE_PROPS_KEY": []byte("Th1s1sAS3crEt"),
+			"NIFI_SENSITIVE_PROPS_KEY": password,
 		},
 	}
 	return secret
@@ -1080,4 +1066,18 @@ func newCRBForSCC(ns types.NamespacedName) *rbacv1.ClusterRoleBinding {
 		Subjects: subjects,
 		RoleRef:  roleRef,
 	}
+}
+
+// generateAdminPassword generates a length fixed string as the administrator password
+func generateAdminPassword(length int) []byte {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!?.,[](){}@#$%&="
+	seed := rand.NewSource(time.Now().UnixNano())
+	random := rand.New(seed)
+
+	result := make([]byte, length)
+	for i := range result {
+		result[i] = charset[random.Intn(len(charset))]
+	}
+
+	return result
 }
