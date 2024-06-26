@@ -83,7 +83,7 @@ metadata:
   name: nifi-example
   namespace: $NIFI_NAMESPACE
 spec:
-  size: 1
+  replicas: 1
   useDefaultCredentials: true
   console:
     expose: true
@@ -102,7 +102,7 @@ This section explains every field in the Nifi's spec:
 
 | Parameter | Description | Values |
 |-----------|-------------|--------|
-| spec.size | Number of Nifi instances to be deployed. Cluster features under development. Still using 1. | Integer >= 0 |
+| spec.replicas | Number of Nifi instances to be deployed. Cluster features under development. Still using 1. | Integer >= 0 |
 | spec.useDefaultCredentials | Configure Nifi with the default admin user credentials. If not, check the Nifi's logs to figure out the default credentials provisioned by Nifi | Boolean (true, false) |
 | spec.console | Nifi Console Spec | *struct* |
 | spec.console.expose | Creates a Openshift route if it sets to 'true' | Boolean (true, false) |

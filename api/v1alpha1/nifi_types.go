@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -38,8 +39,13 @@ type NifiConsoleSpec struct {
 type NifiSpec struct {
 	//+kubebuilder:validation:Minimum=0
 	//+kubebuilder:validation:Required
-	// Size is the size of the nifi deployment
-	Size int32 `json:"size"`
+	//+kubebuilder:default:0
+	// Replicas the ammount of pods for a nifi deployment
+	Replicas int32 `json:"replicas"`
+
+	//+kubebuilder:validation:Optional
+	// Image the container image for the Nifi deployment
+	Image string `json:"image"`
 
 	//+kubebuilder:default:true
 	//+kubebuilder:validation:Required
@@ -48,6 +54,9 @@ type NifiSpec struct {
 
 	//+kubebuilder:validation:Required
 	Console NifiConsoleSpec `json:"console"`
+
+	//+kubebuilder:validation:Optional
+	Resources *corev1.ResourceRequirements `json:"resources"`
 }
 
 // NifiStatus defines the observed state of Nifi
@@ -60,8 +69,8 @@ type NifiStatus struct {
 }
 
 // Nifi is the Schema for the nifis API
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 type Nifi struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

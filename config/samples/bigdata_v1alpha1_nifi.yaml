@@ -4,7 +4,7 @@ kind: Nifi
 metadata:
   name: nifi-http
 spec:
-  size: 1
+  replicas: 1
   useDefaultCredentials: true
   console:
     expose: true
@@ -17,7 +17,7 @@ kind: Nifi
 metadata:
   name: nifi-https
 spec:
-  size: 1
+  replicas: 1
   useDefaultCredentials: true
   console:
     expose: true
@@ -30,7 +30,7 @@ kind: Nifi
 metadata:
   name: nifi-nohostname-http
 spec:
-  size: 1
+  replicas: 1
   useDefaultCredentials: true
   console:
     expose: true
@@ -42,7 +42,7 @@ kind: Nifi
 metadata:
   name: nifi-nohostname-https
 spec:
-  size: 1
+  replicas: 1
   useDefaultCredentials: true
   console:
     expose: true

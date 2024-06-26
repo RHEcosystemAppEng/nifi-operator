@@ -35,7 +35,7 @@ func FetchObject(client client.Client, namespace string, name string, obj client
 	return client.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: name}, obj)
 }
 
-//IsObjectFound Returns a boolean value to denote if the objects already exists or not
+// IsObjectFound Returns a boolean value to denote if the objects already exists or not
 func IsObjectFound(client client.Client, namespace string, name string, obj client.Object) bool {
 	return !apierrors.IsNotFound(FetchObject(client, namespace, name, obj))
 }
